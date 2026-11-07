@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { AnchorProvider, BN, Program, Wallet } from "@anchor-lang/core";
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { occupancy, proof, salt, tree } from "../app/lib/crypto/merkle";
@@ -7,18 +8,28 @@ import idl from "../app/idl/dreadtide.json";
 
 describe("local validator match", () => {
   it("rejects a forged proof and verifies a complete match only after claimant audit", async () => {
-    const connection = new Connection("http://127.0.0.1:8899", "confirmed");
-    const creator = Keypair.generate();
+    const rpcUrl = process.env.DREADTIDE_RPC_URL ?? "http://127.0.0.1:8899";
+    const signerPath = process.env.DREADTIDE_FEE_PAYER_KEYPAIR;
+    const connection = new Connection(rpcUrl, "confirmed");
+    const creator = signerPath
+      ? Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(signerPath, "utf8")) as number[]))
+      : Keypair.generate();
     const opponent = Keypair.generate();
     const provider = new AnchorProvider(connection, new Wallet(creator), { commitment: "confirmed" });
     const program = new Program<Dreadtide>(idl as Dreadtide, provider);
     const programId = new PublicKey(idl.address);
-    const gameId = 42n;
+    if (rpcUrl !== "http://127.0.0.1:8899" && !signerPath) {
+      throw new Error("DREADTIDE_FEE_PAYER_KEYPAIR is required for a remote match");
+    }
+    const gameId = signerPath ? BigInt(Date.now()) : 42n;
     const gameIdBytes = Buffer.alloc(8);
     gameIdBytes.writeBigUInt64LE(gameId);
     const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("game"), creator.publicKey.toBuffer(), gameIdBytes], programId);
-    const airdrop = await connection.requestAirdrop(creator.publicKey, 2_000_000_000);
-    await connection.confirmTransaction(airdrop, "confirmed");
+    if (!signerPath) {
+      const airdrop = await connection.requestAirdrop(creator.publicKey, 2_000_000_000);
+      await connection.confirmTransaction(airdrop, "confirmed");
+    }
+    console.info(`Game account: ${gamePda.toBase58()}`);
 
     const ships = [
       { x: 0, y: 0, vertical: false },
@@ -76,7 +87,11 @@ describe("local validator match", () => {
     const auditSignature = await program.methods.auditBoard(Array.from(creatorSeed), ships)
       .accountsStrict({ game: gamePda, player: creator.publicKey })
       .rpc();
-    const auditTransaction = await connection.getTransaction(auditSignature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    let auditTransaction = await connection.getTransaction(auditSignature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    for (let attempt = 0; !auditTransaction && attempt < 10; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      auditTransaction = await connection.getTransaction(auditSignature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    }
     expect(auditTransaction?.meta?.err).toBeNull();
     expect(auditTransaction?.meta?.computeUnitsConsumed).toBeGreaterThan(0);
     expect(auditTransaction?.meta?.computeUnitsConsumed).toBeLessThanOrEqual(200_000);
@@ -84,5 +99,6 @@ describe("local validator match", () => {
     const finished = await program.account.game.fetch(gamePda);
     expect(finished.phase).toEqual({ verifiedFinished: {} });
     expect(finished.auditedWinner).toBe(0);
-  }, 300_000);
+    console.info(`Verified match transaction: ${auditSignature}`);
+  }, process.env.DREADTIDE_FEE_PAYER_KEYPAIR ? 900_000 : 300_000);
 });

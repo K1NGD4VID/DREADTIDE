@@ -21,6 +21,10 @@ On Windows, use `--target-dir target-windows` for native Rust tests so WSL's Rus
 
 The integration test in `tests/game.integration.spec.ts` requires a validator on `http://127.0.0.1:8899` with the DREADTIDE program loaded at the address in `app/idl/dreadtide.json`. GitHub Actions builds the SBF program, starts that validator, and runs `npm run test:local`. [Run 42388975297](https://github.com/K1NGD4VID/DREADTIDE/actions/runs/42388975297) passed the full 12-hit match, forged-proof rejection, and claimant audit at 37,176 CU. [Run 42390006749](https://github.com/K1NGD4VID/DREADTIDE/actions/runs/42390006749) passed with the standard transaction compute budget.
 
+## Devnet match check
+
+After deployment, copy `.env.example` to the ignored `.env` file and set `DREADTIDE_RPC_URL` and `DREADTIDE_FEE_PAYER_KEYPAIR`. Run `npm run test:devnet` from a trusted machine with a funded Devnet fee payer. The test sends real Devnet transactions, creates a fresh game account, and prints its address and the verified audit signature for Solana Explorer. Keep the keypair file and `.env` private.
+
 ## Current limits
 
 - The candidate program address is `BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4`. It is not deployed yet.

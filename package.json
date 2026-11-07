@@ -5,6 +5,7 @@
   "scripts": {
     "test:crypto": "vitest run tests/crypto-vectors.spec.ts",
     "test:local": "vitest run tests/game.integration.spec.ts",
+    "test:devnet": "node --env-file=.env ./node_modules/vitest/vitest.mjs run tests/game.integration.spec.ts",
     "typecheck": "tsc --noEmit",
     "generate:vectors": "node scripts/generate-vectors.mjs"
   },
