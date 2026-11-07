@@ -58,6 +58,33 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(58px, 6.5vw, 82px); line-heig
 .mission-status span { color: var(--muted); }
 .mission-status strong { color: var(--signal); }
 
+.game-console { max-width: 1344px; margin: 0 auto 120px; padding: 44px; border: 1px solid var(--line); background: var(--panel); }
+.console-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:24px; margin-bottom:36px; }
+.console-heading h2 { margin:0; font-size:clamp(36px,5vw,72px); line-height:.95; letter-spacing:-.038em; text-transform:uppercase; }
+.live-badge { color:var(--muted); font:700 11px/1 monospace; letter-spacing:.12em; white-space:nowrap; }
+.live-badge i { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--muted); margin-right:8px; }
+.live-badge.online { color:var(--signal); }
+.live-badge.online i { background:var(--signal); box-shadow:0 0 12px var(--signal); }
+.console-empty { border-top:1px solid var(--line); padding-top:32px; }
+.console-empty h3 { margin:0 0 12px; font-size:28px; text-transform:uppercase; }
+.console-empty p, .console-card p { color:var(--muted); line-height:1.6; }
+.console-grid { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); }
+.console-card { min-height:300px; padding:28px 28px 24px 0; border-right:1px solid var(--line); margin-right:28px; display:flex; flex-direction:column; }
+.console-card:last-child { border-right:0; margin-right:0; padding-right:0; }
+.console-card .step { color:var(--signal); font:700 11px/1 monospace; }
+.console-card h3 { margin:48px 0 0; font-size:26px; text-transform:uppercase; }
+.console-card p { min-height:52px; margin:12px 0 18px; }
+.console-card label { color:var(--muted); font:700 10px/1 monospace; letter-spacing:.1em; text-transform:uppercase; margin-bottom:8px; }
+.console-card input { width:100%; min-height:44px; padding:0 12px; border:1px solid var(--line); background:#020817; color:var(--ink); font:700 12px monospace; outline:none; }
+.console-card input:focus { border-color:var(--signal); }
+.console-card button { margin-top:12px; min-height:44px; border:1px solid var(--signal); background:var(--signal); color:#001019; font:800 11px monospace; letter-spacing:.08em; cursor:pointer; }
+.console-card button:disabled { opacity:.4; cursor:not-allowed; }
+.status-lines { display:grid; gap:14px; margin:22px 0 18px; }
+.status-lines span { display:flex; justify-content:space-between; gap:16px; color:var(--muted); font:700 10px monospace; }
+.status-lines b { color:var(--ink); font-weight:700; text-align:right; }
+.commit-button { margin-top:auto !important; }
+.console-message { min-height:20px; margin:24px 0 0; color:var(--signal); font:700 11px/1.4 monospace; }
+
 .protocol { max-width: 1344px; margin: 0 auto; padding: 0 0 120px; }
 .protocol > h2 { max-width: 500px; margin-bottom: 50px; }
 .protocol-grid { display: grid; grid-template-columns: 1.2fr .9fr .9fr; border-top: 1px solid var(--line); }
@@ -83,6 +110,12 @@ footer a { color: var(--signal); text-decoration: none; }
   .hero-actions { align-items: stretch; flex-direction: column; }
   .primary-action, .secondary-action { width: 100% !important; justify-content: center !important; }
   .mission-panel { margin: 0 16px 90px; padding: 28px 22px; grid-template-columns: 1fr; gap: 42px; }
+  .game-console { margin:0 16px 80px; padding:28px 22px; }
+  .console-heading { flex-direction:column; }
+  .console-grid { grid-template-columns:1fr; }
+  .console-card,.console-card:last-child { min-height:0; margin:0; padding:28px 0; border-right:0; border-bottom:1px solid var(--line); }
+  .console-card:last-child { border-bottom:0; }
+  .console-card h3 { margin-top:32px; }
   .protocol { padding: 0 16px 80px; }
   .protocol-grid { grid-template-columns: 1fr; }
   .protocol-grid article, .protocol-grid article:first-child { min-height: 220px; padding: 28px 0; border-right: 0; border-bottom: 1px solid var(--line); }

@@ -2,6 +2,7 @@
 
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { GameConsole } from "./game-console";
 
 const PROGRAM = "BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4";
 const MATCH = "4pkJGNKMSVBzw6EVqJake9PhaiYQwg2A9tnt9qP45zHVDJvtmJ5ZurH5fsWHtPZfiGretNa8crres2mbHVkqDqaD";
@@ -56,6 +57,8 @@ export default function Home() {
           <span>AUDIT COST</span><strong>37,026 CU</strong>
         </div>
       </section>
+
+      <GameConsole />
 
       <section className="protocol" aria-labelledby="protocol-title">
         <h2 id="protocol-title">The battle protocol</h2>

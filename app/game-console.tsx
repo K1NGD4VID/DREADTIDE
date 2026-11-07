@@ -1,0 +1,123 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnchorProvider, BN, Program } from "@anchor-lang/core";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
+import idl from "./idl/dreadtide.json";
+import type { Dreadtide } from "./idl/dreadtide";
+import { occupancy, tree } from "./lib/crypto/merkle";
+
+const PROGRAM_ID = new PublicKey(idl.address);
+const EMPTY_KEY = new PublicKey(new Uint8Array(32));
+const fleet = [
+  { x: 0, y: 0, vertical: false },
+  { x: 2, y: 2, vertical: true },
+  { x: 4, y: 4, vertical: false },
+  { x: 7, y: 6, vertical: true },
+] as const;
+
+function bytesFromSeed(): Uint8Array {
+  const seed = new Uint8Array(32);
+  crypto.getRandomValues(seed);
+  return seed;
+}
+
+function short(value: string): string { return `${value.slice(0, 6)}...${value.slice(-6)}`; }
+
+export function GameConsole() {
+  const { connection } = useConnection();
+  const { connected, publicKey, signAllTransactions, signTransaction } = useWallet();
+  const [gameId, setGameId] = useState(() => String(Date.now()));
+  const [gameAddress, setGameAddress] = useState("");
+  const [phase, setPhase] = useState("LOBBY");
+  const [players, setPlayers] = useState("Waiting for opponent");
+  const [committed, setCommitted] = useState("0 / 2");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("Connect a wallet to create or join a match.");
+
+  const wallet = useMemo<any>(() => {
+    if (!publicKey || !signTransaction || !signAllTransactions) return null;
+    return { publicKey, signTransaction, signAllTransactions };
+  }, [publicKey, signAllTransactions, signTransaction]);
+
+  const program = useMemo(() => {
+    if (!wallet) return null;
+    return new Program<Dreadtide>(idl as Dreadtide, new AnchorProvider(connection, wallet, { commitment: "confirmed" }));
+  }, [connection, wallet]);
+
+  const refresh = useCallback(async (address = gameAddress) => {
+    if (!program || !address) return;
+    try {
+      const state = await program.account.game.fetch(new PublicKey(address)) as any;
+      const nextPhase = Object.keys(state.phase ?? {})[0] ?? "lobby";
+      setPhase(nextPhase.replace(/([A-Z])/g, " $1").toUpperCase());
+      setCommitted(`${state.committed.filter(Boolean).length} / 2`);
+      setPlayers(state.opponent?.toBase58?.() && state.opponent.toBase58() !== EMPTY_KEY.toBase58() ? "Opponent joined" : "Waiting for opponent");
+      setGameId(state.gameId.toString());
+      setMessage("Live state synced from Devnet.");
+    } catch {
+      setMessage("Could not read that game account. Check the address and Devnet network.");
+    }
+  }, [gameAddress, program]);
+
+  useEffect(() => { if (connected && gameAddress) void refresh(); }, [connected, gameAddress, refresh]);
+
+  async function createGame() {
+    if (!program || !publicKey) return;
+    setBusy(true); setMessage("Awaiting wallet approval...");
+    try {
+      const id = BigInt(gameId);
+      const idBytes = Buffer.alloc(8); idBytes.writeBigUInt64LE(id);
+      const [pda] = PublicKey.findProgramAddressSync([Buffer.from("game"), publicKey.toBuffer(), idBytes], PROGRAM_ID);
+      await program.methods.createGame(new BN(id.toString())).accountsStrict({ game: pda, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
+      setGameAddress(pda.toBase58());
+      setPhase("LOBBY"); setPlayers("Waiting for opponent"); setMessage("Match created. Share the game address with your opponent.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Create transaction failed."); }
+    finally { setBusy(false); }
+  }
+
+  async function joinGame() {
+    if (!program || !publicKey || !gameAddress) return;
+    setBusy(true); setMessage("Awaiting wallet approval...");
+    try {
+      await program.methods.joinGame().accountsStrict({ game: new PublicKey(gameAddress), opponent: publicKey }).rpc();
+      await refresh();
+      setMessage("Joined. Both captains can now commit their fleet.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Join transaction failed."); }
+    finally { setBusy(false); }
+  }
+
+  async function commitFleet() {
+    if (!program || !publicKey || !gameAddress) return;
+    setBusy(true); setMessage("Building your private Merkle commitment...");
+    try {
+      const state = await program.account.game.fetch(new PublicKey(gameAddress)) as any;
+      const stored = localStorage.getItem(`dreadtide-seed:${gameAddress}:${publicKey.toBase58()}`);
+      const seed = stored ? Uint8Array.from(JSON.parse(stored) as number[]) : bytesFromSeed();
+      localStorage.setItem(`dreadtide-seed:${gameAddress}:${publicKey.toBase58()}`, JSON.stringify(Array.from(seed)));
+      const levels = await tree(BigInt(state.gameId.toString()), publicKey.toBytes(), seed, occupancy(fleet));
+      await program.methods.commitBoard(Array.from(levels[6][0])).accountsStrict({ game: new PublicKey(gameAddress), player: publicKey }).rpc();
+      await refresh();
+      setMessage("Fleet committed. Your board remains hidden until an audit.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Commit transaction failed."); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="game-console" aria-labelledby="game-console-title">
+      <div className="console-heading">
+        <div><p className="eyebrow">MATCH OPERATIONS</p><h2 id="game-console-title">Enter the war room.</h2></div>
+        <span className={`live-badge ${connected ? "online" : ""}`}><i /> {connected ? "WALLET READY" : "WALLET OFFLINE"}</span>
+      </div>
+      {!connected ? <div className="console-empty"><h3>Your fleet is waiting.</h3><p>Connect Phantom or Solflare above to create a Devnet match, join an opponent, and commit your hidden board.</p></div> : (
+        <div className="console-grid">
+          <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Generate a new game account owned by your wallet.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} onChange={(event) => setGameId(event.target.value.replace(/[^0-9]/g, ""))} /><button disabled={busy || !gameId} onClick={createGame}>{busy ? "SIGNING..." : "CREATE MATCH"}</button></div>
+          <div className="console-card join-card"><span className="step">02</span><h3>Join a match</h3><p>Paste the game account address shared by the host.</p><label htmlFor="game-address">Game account</label><input id="game-address" value={gameAddress} onChange={(event) => setGameAddress(event.target.value.trim())} placeholder="Game PDA address" /><button disabled={busy || !gameAddress} onClick={joinGame}>JOIN MATCH</button></div>
+          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{gameAddress ? short(gameAddress) : "NOT SET"}</b></span><span>PHASE <b>{phase}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={busy || !gameAddress || phase !== "COMMIT"} onClick={commitFleet}>COMMIT HIDDEN FLEET</button></div>
+        </div>
+      )}
+      <p className="console-message" role="status">{message}</p>
+    </section>
+  );
+}

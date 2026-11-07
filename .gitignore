@@ -8,3 +8,6 @@ test-ledger/
 !.env.example
 *.log
 .tmp-landbook-skill/
+
+.vercel
+.env*

@@ -6,6 +6,7 @@ import { WalletContext } from "./providers";
 export const metadata: Metadata = {
   title: "DREADTIDE | Naval strategy on Solana",
   description: "Commit your fleet. Prove every shot. Win on Solana Devnet.",
+  icons: { icon: "/dreadtide-mark.png" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

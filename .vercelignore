@@ -1,0 +1,17 @@
+target
+target-windows
+.next
+node_modules
+test-ledger
+.tmp-landbook-skill
+.git
+.github
+docs
+fixtures
+tests
+programs
+scripts
+Anchor.toml
+Cargo.toml
+Cargo.lock
+*.md
