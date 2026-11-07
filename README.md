@@ -1,6 +1,6 @@
 # DREADTIDE
 
-DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players will commit hidden fleets, answer shots with Merkle proofs, and audit the claimant's own board before a verified victory. This repository contains an Anchor program source and shared crypto foundation; it does **not** yet contain a deployed game or playable UI.
+DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players commit hidden fleets, answer shots with Merkle proofs, and audit the claimant's own board before a verified victory. The Anchor program has passed a complete-match local validator test. Devnet deployment and the playable UI are next.
 
 ## Crypto gate
 
@@ -17,13 +17,13 @@ The fixture may be regenerated with `npm run generate:vectors`; review and rerun
 
 On Windows, use `--target-dir target-windows` for native Rust tests so WSL's Rust compiler can use `target/` without mixing incompatible artifacts.
 
-## Local validator gate (pending)
+## Local validator gate (passed in CI)
 
-The separate integration test in `tests/game.integration.spec.ts` requires a validator on `http://127.0.0.1:8899` with the DREADTIDE program loaded at the address in `app/idl/dreadtide.json`. Run `npm run test:local` only after an SBF build and local program deployment. This test has not yet passed in this repository.
+The integration test in `tests/game.integration.spec.ts` requires a validator on `http://127.0.0.1:8899` with the DREADTIDE program loaded at the address in `app/idl/dreadtide.json`. GitHub Actions builds the SBF program, starts that validator, and runs `npm run test:local`. [Run 42388975297](https://github.com/K1NGD4VID/DREADTIDE/actions/runs/42388975297) passed the full 12-hit match, forged-proof rejection, and claimant audit at 37,176 CU.
 
 ## Current limits
 
-- The Anchor program has compiled in native Rust tests but has not passed a Solana SBF build or local validator integration test. Its program ID is a placeholder.
+- The candidate program address is `BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4`. It is not deployed yet.
 - No Devnet deployment, transaction signatures, or live Explorer evidence yet.
 - No wallet, bot, spectator, session, or escrow implementation yet.
 - A Merkle root fixes cell responses, but it does not prove the committed board contains a legal fleet. The planned claimant-only audit is required before any verified victory.
