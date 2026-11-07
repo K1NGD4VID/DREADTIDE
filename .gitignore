@@ -7,3 +7,4 @@ test-ledger/
 .env*
 !.env.example
 *.log
+.tmp-landbook-skill/
