@@ -4,6 +4,9 @@ resolution = true
 [programs.localnet]
 dreadtide = "BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4"
 
+[programs.devnet]
+dreadtide = "BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4"
+
 [provider]
 cluster = "localnet"
 wallet = "~/.config/solana/id.json"

@@ -1,6 +1,6 @@
 # DREADTIDE
 
-DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players commit hidden fleets, answer shots with Merkle proofs, and audit the claimant's own board before a verified victory. The Anchor program has passed a complete-match local validator test. Devnet deployment and the playable UI are next.
+DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players commit hidden fleets, answer shots with Merkle proofs, and audit the claimant's own board before a verified victory. The Anchor program has passed a complete-match local validator test and is deployed on Devnet. A live match and playable UI are next.
 
 ## Crypto gate
 
@@ -27,8 +27,8 @@ After deployment, copy `.env.example` to the ignored `.env` file and set `DREADT
 
 ## Current limits
 
-- The candidate program address is `BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4`. It is not deployed yet.
-- No Devnet deployment, transaction signatures, or live Explorer evidence yet.
+- The [Devnet program](https://explorer.solana.com/address/BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4?cluster=devnet) is deployed; [deployment transaction](https://explorer.solana.com/tx/4CRrke2ARXGZq4vCT5z3SacHUU6h1jdzVA3ZM7UAPx98rWcurB3p8MWv7RuLB3BAjBvLwrmPvtEkeNwFBHCLhYwZ?cluster=devnet).
+- A complete live Devnet match has not yet been verified.
 - No wallet, bot, spectator, session, or escrow implementation yet.
 - A Merkle root fixes cell responses, but it does not prove the committed board contains a legal fleet. The planned claimant-only audit is required before any verified victory.
 
