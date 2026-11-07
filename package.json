@@ -3,13 +3,19 @@
   "private": true,
   "version": "0.1.0",
   "scripts": {
-    "test:crypto": "vitest run",
+    "test:crypto": "vitest run tests/crypto-vectors.spec.ts",
+    "test:local": "vitest run tests/game.integration.spec.ts",
     "typecheck": "tsc --noEmit",
     "generate:vectors": "node scripts/generate-vectors.mjs"
   },
   "devDependencies": {
+    "@types/bn.js": "^5.2.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "@anchor-lang/core": "^1.2.2",
+    "@solana/web3.js": "^1.99.0"
   }
 }

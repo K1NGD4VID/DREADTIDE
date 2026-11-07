@@ -1,5 +1,7 @@
 node_modules/
 target/
+test-ledger/
+.anchor/
 .next/
 .env*
 !.env.example

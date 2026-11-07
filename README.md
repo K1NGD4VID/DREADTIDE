@@ -15,6 +15,10 @@ cargo test --workspace
 
 The fixture may be regenerated with `npm run generate:vectors`; review and rerun both test suites after any crypto change.
 
+## Local validator gate (pending)
+
+The separate integration test in `tests/game.integration.spec.ts` requires a built `target/idl/dreadtide.json` and a validator on `http://127.0.0.1:8899` with the DREADTIDE program loaded at the IDL address. Run `npm run test:local` only after that setup. This test has not yet passed in this repository.
+
 ## Current limits
 
 - The Anchor program has compiled in native Rust tests but has not passed a Solana SBF build or local validator integration test. Its program ID is a placeholder.
