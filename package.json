@@ -1,0 +1,15 @@
+{
+  "name": "dreadtide",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "test:crypto": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "generate:vectors": "node scripts/generate-vectors.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

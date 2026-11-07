@@ -1,0 +1,59 @@
+{
+  "scheme": "DREADTIDE-SHA256-MERKLE-v1",
+  "gameId": "42",
+  "player": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+  "seed": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "ships": [
+    {
+      "x": 0,
+      "y": 0,
+      "vertical": false
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "vertical": true
+    },
+    {
+      "x": 4,
+      "y": 4,
+      "vertical": false
+    },
+    {
+      "x": 7,
+      "y": 6,
+      "vertical": true
+    }
+  ],
+  "root": "649c20030ade2666b58c31ce0b35638b67ba867714339a2588390835cbb25c02",
+  "cases": [
+    {
+      "index": 18,
+      "isShip": true,
+      "salt": "eafd684b349bc2d08e1daaa2ce0f7f7abc9ed5a074480d0c1e9f9e44bf4b1afb",
+      "leaf": "07e24fadcbe27a7e7f5b13d4aab04839eb49fb87ff099161b4c0182d3a48a1d9",
+      "siblings": [
+        "f0bb70aeda29863b35e6c9a253697489f15ca7a6eb33a6182f155575e2a48f9b",
+        "fd2a0bb5a0dcaa1b5918d213618188c84fa094f495c055fed516f8b6cbca9e18",
+        "d357f2535923e335e3e42db8fe49c1a1a2676650cc5948523c67d553798f01ad",
+        "aa1004ed325789c0af9208d7b554cbf26c8e59d7714a2931e0b32517fbb713e1",
+        "390a9345e6995050a37c159d3122e9792780d2e12df26e20e06bc827c0afe21b",
+        "81c27a8431da3f8df6081da1eee696c9c797b6b06b05457760e1b3be18c9e945"
+      ]
+    },
+    {
+      "index": 15,
+      "isShip": false,
+      "salt": "43b48ebcbb79adc0687780431ffa7faf4d58c6f93fcb1c5c2af7658075bbb487",
+      "leaf": "59b7fec828f612fbe63bb140081eec3b36dcc78f2a4ccce1920f5f40542a925f",
+      "siblings": [
+        "83fa54c3eba9f722e922270a88dc76268a520125fc5c515a799edb54bf1be299",
+        "69fa80c19fc4fb021ad9efa0517f8e71c7b69653a4fe69e0e6f2d4d68944e4df",
+        "72fde3010d072b21fb2886945f1af46cc372654151608a50b26bb6218b4191a9",
+        "20b99244a79d6d0fa2624c614dd67be0020cbd663dce344429531b0bce1d276c",
+        "d38698de1ebb2bac4f2b604f6dac5d93c87633fe589c75f2cdd18d9742c22cdb",
+        "81c27a8431da3f8df6081da1eee696c9c797b6b06b05457760e1b3be18c9e945"
+      ]
+    }
+  ]
+}
