@@ -1,7 +1,9 @@
 use crate::{crypto, fleet};
 use anchor_lang::prelude::*;
 
-pub const ACTION_SECONDS: i64 = 120;
+// Browser wallet matches need enough time for a second player to receive the
+// address, switch accounts or devices, approve, and confirm on Devnet.
+pub const ACTION_SECONDS: i64 = 900;
 pub const AUDIT_SECONDS: i64 = 300;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
