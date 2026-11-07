@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { AnchorProvider, BN, Program, Wallet } from "@anchor-lang/core";
-import { ComputeBudgetProgram, Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { occupancy, proof, salt, tree } from "../app/lib/crypto/merkle";
 import type { Dreadtide } from "../app/idl/dreadtide";
 import idl from "../app/idl/dreadtide.json";
@@ -75,12 +75,11 @@ describe("local validator match", () => {
 
     const auditSignature = await program.methods.auditBoard(Array.from(creatorSeed), ships)
       .accountsStrict({ game: gamePda, player: creator.publicKey })
-      .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })])
       .rpc();
     const auditTransaction = await connection.getTransaction(auditSignature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
     expect(auditTransaction?.meta?.err).toBeNull();
     expect(auditTransaction?.meta?.computeUnitsConsumed).toBeGreaterThan(0);
-    expect(auditTransaction?.meta?.computeUnitsConsumed).toBeLessThanOrEqual(1_400_000);
+    expect(auditTransaction?.meta?.computeUnitsConsumed).toBeLessThanOrEqual(200_000);
     console.info(`Claimant audit consumed ${auditTransaction?.meta?.computeUnitsConsumed} CU`);
     const finished = await program.account.game.fetch(gamePda);
     expect(finished.phase).toEqual({ verifiedFinished: {} });
