@@ -28,7 +28,7 @@ After deployment, copy `.env.example` to the ignored `.env` file and set `DREADT
 ## Current limits
 
 - The [Devnet program](https://explorer.solana.com/address/BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4?cluster=devnet) is deployed; [deployment transaction](https://explorer.solana.com/tx/4CRrke2ARXGZq4vCT5z3SacHUU6h1jdzVA3ZM7UAPx98rWcurB3p8MWv7RuLB3BAjBvLwrmPvtEkeNwFBHCLhYwZ?cluster=devnet).
-- A complete live Devnet match has not yet been verified.
+- A [complete Devnet match](https://explorer.solana.com/address/GLwivaP85C8bfVVpUC1PajnaVHNj1Xdn8anUDAdDz1f9?cluster=devnet) passed; its [claimant audit transaction](https://explorer.solana.com/tx/4pkJGNKMSVBzw6EVqJake9PhaiYQwg2A9tnt9qP45zHVDJvtmJ5ZurH5fsWHtPZfiGretNa8crres2mbHVkqDqaD?cluster=devnet) finalized at 37,026 CU.
 - No wallet, bot, spectator, session, or escrow implementation yet.
 - A Merkle root fixes cell responses, but it does not prove the committed board contains a legal fleet. The planned claimant-only audit is required before any verified victory.
 
