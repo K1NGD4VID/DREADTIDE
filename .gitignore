@@ -4,6 +4,7 @@ target-windows/
 test-ledger/
 .anchor/
 .next/
+*.tsbuildinfo
 .env*
 !.env.example
 *.log

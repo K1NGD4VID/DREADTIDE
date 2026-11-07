@@ -1,6 +1,7 @@
 target
 target-windows
 .next
+*.tsbuildinfo
 node_modules
 test-ledger
 .tmp-landbook-skill
