@@ -6,7 +6,7 @@ pub mod state;
 
 use state::{DreadtideError, Game, Phase, ACTION_SECONDS};
 
-declare_id!("cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN");
+declare_id!("BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4");
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct ShipPlacement {

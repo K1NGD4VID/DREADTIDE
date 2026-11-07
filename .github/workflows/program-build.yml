@@ -38,7 +38,7 @@ jobs:
         run: npm ci
       - name: Start local validator
         run: |
-          solana-test-validator --reset --bpf-program cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN target/deploy/dreadtide.so > validator.log 2>&1 &
+          solana-test-validator --reset --bpf-program BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4 target/deploy/dreadtide.so > validator.log 2>&1 &
           for attempt in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:8899/health; then
               exit 0

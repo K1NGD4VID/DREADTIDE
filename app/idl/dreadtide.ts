@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/dreadtide.json`.
  */
 export type Dreadtide = {
-  "address": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+  "address": "BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4",
   "metadata": {
     "name": "dreadtide",
     "version": "0.1.0",

@@ -2,7 +2,7 @@
 resolution = true
 
 [programs.localnet]
-dreadtide = "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN"
+dreadtide = "BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4"
 
 [provider]
 cluster = "localnet"
