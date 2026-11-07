@@ -6,7 +6,7 @@ import type { Dreadtide } from "../app/idl/dreadtide";
 import idl from "../app/idl/dreadtide.json";
 
 describe("local validator match", () => {
-  it("accepts a real proof, rejects a forged one, and enforces turn state", async () => {
+  it("rejects a forged proof and verifies a complete match only after claimant audit", async () => {
     const connection = new Connection("http://127.0.0.1:8899", "confirmed");
     const creator = Keypair.generate();
     const opponent = Keypair.generate();
@@ -54,5 +54,29 @@ describe("local validator match", () => {
     expect(state.phase).toEqual({ fire: {} });
     expect(state.turn).toBe(1);
     await expect(program.methods.fire(18).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc()).rejects.toThrow();
-  }, 120_000);
+
+    const remainingHits = board.flatMap((occupied, index) => occupied && index !== 18 ? [index] : []);
+    const misses = board.flatMap((occupied, index) => !occupied ? [index] : []).slice(0, remainingHits.length);
+    for (let round = 0; round < remainingHits.length; round++) {
+      const miss = misses[round];
+      await program.methods.fire(miss).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
+      await program.methods.respond(false, Array.from(await salt(creatorSeed, miss)), proof(creatorTree, miss).map((item) => Array.from(item)))
+        .accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
+      const hit = remainingHits[round];
+      await program.methods.fire(hit).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
+      await program.methods.respond(true, Array.from(await salt(opponentSeed, hit)), proof(opponentTree, hit).map((item) => Array.from(item)))
+        .accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
+    }
+    const provisional = await program.account.game.fetch(gamePda);
+    expect(provisional.hits[1]).toBe(12);
+    expect(provisional.phase).toEqual({ audit: {} });
+    expect(provisional.claimant).toBe(0);
+    expect(provisional.auditedWinner).toBe(255);
+
+    await program.methods.auditBoard(Array.from(creatorSeed), ships)
+      .accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
+    const finished = await program.account.game.fetch(gamePda);
+    expect(finished.phase).toEqual({ verifiedFinished: {} });
+    expect(finished.auditedWinner).toBe(0);
+  }, 300_000);
 });
