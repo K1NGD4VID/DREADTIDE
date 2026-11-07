@@ -30,6 +30,28 @@ jobs:
         run: cargo test --workspace --locked
       - name: Build SBF program
         run: cargo-build-sbf --manifest-path programs/dreadtide/Cargo.toml --tools-version v1.57 --arch v3 -- --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install client dependencies
+        run: npm ci
+      - name: Start local validator
+        run: |
+          solana-test-validator --reset --bpf-program cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN target/deploy/dreadtide.so > validator.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8899/health; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat validator.log
+          exit 1
+      - name: Complete match integration test
+        run: npm run test:local
+      - name: Validator log on failure
+        if: failure()
+        run: cat validator.log 2>/dev/null || true
       - name: Upload program binary
         uses: actions/upload-artifact@v4
         with:
