@@ -1,6 +1,6 @@
 # DREADTIDE
 
-DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players will commit hidden fleets, answer shots with Merkle proofs, and audit the claimant's own board before a verified victory. This repository currently contains the crypto foundation; it does **not** yet contain a deployed game or playable UI.
+DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players will commit hidden fleets, answer shots with Merkle proofs, and audit the claimant's own board before a verified victory. This repository contains an Anchor program source and shared crypto foundation; it does **not** yet contain a deployed game or playable UI.
 
 ## Crypto gate
 
@@ -17,7 +17,8 @@ The fixture may be regenerated with `npm run generate:vectors`; review and rerun
 
 ## Current limits
 
-- No on-chain program, Devnet deployment, transaction signatures, or live Explorer evidence yet.
+- The Anchor program has compiled in native Rust tests but has not passed a Solana SBF build or local validator integration test. Its program ID is a placeholder.
+- No Devnet deployment, transaction signatures, or live Explorer evidence yet.
 - No wallet, bot, spectator, session, or escrow implementation yet.
 - A Merkle root fixes cell responses, but it does not prove the committed board contains a legal fleet. The planned claimant-only audit is required before any verified victory.
 

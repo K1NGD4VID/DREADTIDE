@@ -45,20 +45,38 @@ pub fn root(game_id: u64, player: &Hash, seed: &Hash, board: &[bool; 64]) -> Has
     level[0]
 }
 
-pub fn verify(root: &Hash, game_id: u64, player: &Hash, index: u8, is_ship: bool, cell_salt: &Hash, proof: &Proof) -> bool {
+pub fn verify(
+    root: &Hash,
+    game_id: u64,
+    player: &Hash,
+    index: u8,
+    is_ship: bool,
+    cell_salt: &Hash,
+    proof: &Proof,
+) -> bool {
     if index >= 64 {
         return false;
     }
     let mut hash = leaf(game_id, player, index, is_ship, cell_salt);
     let mut position = index;
     for sibling in proof {
-        hash = if position & 1 == 0 { node(&hash, sibling) } else { node(sibling, &hash) };
+        hash = if position & 1 == 0 {
+            node(&hash, sibling)
+        } else {
+            node(sibling, &hash)
+        };
         position >>= 1;
     }
     &hash == root
 }
 
-pub fn proof(game_id: u64, player: &Hash, seed: &Hash, board: &[bool; 64], index: u8) -> Option<Proof> {
+pub fn proof(
+    game_id: u64,
+    player: &Hash,
+    seed: &Hash,
+    board: &[bool; 64],
+    index: u8,
+) -> Option<Proof> {
     if index >= 64 {
         return None;
     }
