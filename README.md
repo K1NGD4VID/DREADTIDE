@@ -10,14 +10,16 @@ The fixed grid is 8×8 with four straight ships of lengths `[4,3,3,2]`. `fixture
 npm install
 npm run test:crypto
 npm run typecheck
-cargo test --workspace
+cargo test --workspace --target-dir target-windows
 ```
 
 The fixture may be regenerated with `npm run generate:vectors`; review and rerun both test suites after any crypto change.
 
+On Windows, use `--target-dir target-windows` for native Rust tests so WSL's Rust compiler can use `target/` without mixing incompatible artifacts.
+
 ## Local validator gate (pending)
 
-The separate integration test in `tests/game.integration.spec.ts` requires a built `target/idl/dreadtide.json` and a validator on `http://127.0.0.1:8899` with the DREADTIDE program loaded at the IDL address. Run `npm run test:local` only after that setup. This test has not yet passed in this repository.
+The separate integration test in `tests/game.integration.spec.ts` requires a validator on `http://127.0.0.1:8899` with the DREADTIDE program loaded at the address in `app/idl/dreadtide.json`. Run `npm run test:local` only after an SBF build and local program deployment. This test has not yet passed in this repository.
 
 ## Current limits
 

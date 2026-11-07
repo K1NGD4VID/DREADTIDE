@@ -1,5 +1,6 @@
 node_modules/
 target/
+target-windows/
 test-ledger/
 .anchor/
 .next/

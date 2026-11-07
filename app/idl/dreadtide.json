@@ -1,0 +1,802 @@
+{
+  "address": "cGfHiC6Kgg3FpFZvgwGcswsCRtp4aBP2fzuXRQPizuN",
+  "metadata": {
+    "name": "dreadtide",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "audit_board",
+      "discriminator": [
+        114,
+        140,
+        84,
+        249,
+        110,
+        188,
+        244,
+        120
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "seed",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "placements",
+          "type": {
+            "array": [
+              {
+                "defined": {
+                  "name": "ShipPlacement"
+                }
+              },
+              4
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "cancel_game",
+      "discriminator": [
+        121,
+        194,
+        154,
+        118,
+        103,
+        235,
+        149,
+        52
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claim_timeout",
+      "discriminator": [
+        130,
+        234,
+        45,
+        53,
+        120,
+        90,
+        86,
+        178
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "commit_board",
+      "discriminator": [
+        55,
+        182,
+        0,
+        25,
+        85,
+        224,
+        122,
+        247
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "create_game",
+      "discriminator": [
+        124,
+        69,
+        75,
+        66,
+        184,
+        220,
+        72,
+        206
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "game_id",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fire",
+      "discriminator": [
+        42,
+        28,
+        236,
+        248,
+        254,
+        215,
+        141,
+        181
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "join_game",
+      "discriminator": [
+        107,
+        112,
+        18,
+        38,
+        56,
+        173,
+        60,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "opponent",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "respond",
+      "discriminator": [
+        72,
+        65,
+        227,
+        97,
+        42,
+        255,
+        147,
+        12
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "is_ship",
+          "type": "bool"
+        },
+        {
+          "name": "cell_salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "siblings",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              6
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Game",
+      "discriminator": [
+        27,
+        90,
+        166,
+        125,
+        74,
+        100,
+        121,
+        18
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "AuditAccepted",
+      "discriminator": [
+        177,
+        84,
+        143,
+        2,
+        214,
+        173,
+        209,
+        225
+      ]
+    },
+    {
+      "name": "AuditRejected",
+      "discriminator": [
+        224,
+        140,
+        96,
+        199,
+        139,
+        146,
+        210,
+        98
+      ]
+    },
+    {
+      "name": "ShotVerified",
+      "discriminator": [
+        59,
+        21,
+        98,
+        237,
+        83,
+        149,
+        248,
+        27
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "WrongPhase",
+      "msg": "Wrong game phase"
+    },
+    {
+      "code": 6001,
+      "name": "DeadlinePassed",
+      "msg": "Action deadline has passed"
+    },
+    {
+      "code": 6002,
+      "name": "DeadlineNotPassed",
+      "msg": "Action deadline has not passed"
+    },
+    {
+      "code": 6003,
+      "name": "NotPlayer",
+      "msg": "Signer is not a player"
+    },
+    {
+      "code": 6004,
+      "name": "WrongPlayer",
+      "msg": "Wrong player for this action"
+    },
+    {
+      "code": 6005,
+      "name": "SelfJoin",
+      "msg": "Creator cannot join their own game"
+    },
+    {
+      "code": 6006,
+      "name": "AlreadyCommitted",
+      "msg": "Board already committed"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidCell",
+      "msg": "Cell is outside the grid"
+    },
+    {
+      "code": 6008,
+      "name": "DuplicateShot",
+      "msg": "Cell has already been fired upon"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidProof",
+      "msg": "Merkle proof does not match defender root"
+    },
+    {
+      "code": 6010,
+      "name": "NoEligibleClaimant",
+      "msg": "No committed player can claim this timeout"
+    },
+    {
+      "code": 6011,
+      "name": "ClockOverflow",
+      "msg": "Clock arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "AuditAccepted",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AuditRejected",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "claimant",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Game",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "opponent",
+            "type": "pubkey"
+          },
+          {
+            "name": "game_id",
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "phase",
+            "type": {
+              "defined": {
+                "name": "Phase"
+              }
+            }
+          },
+          {
+            "name": "roots",
+            "type": {
+              "array": [
+                {
+                  "array": [
+                    "u8",
+                    32
+                  ]
+                },
+                2
+              ]
+            }
+          },
+          {
+            "name": "committed",
+            "type": {
+              "array": [
+                "bool",
+                2
+              ]
+            }
+          },
+          {
+            "name": "turn",
+            "type": "u8"
+          },
+          {
+            "name": "pending_index",
+            "type": "u8"
+          },
+          {
+            "name": "pending_attacker",
+            "type": "u8"
+          },
+          {
+            "name": "shots",
+            "type": {
+              "array": [
+                "u64",
+                2
+              ]
+            }
+          },
+          {
+            "name": "hits",
+            "type": {
+              "array": [
+                "u8",
+                2
+              ]
+            }
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "claimant",
+            "type": "u8"
+          },
+          {
+            "name": "audit_attempts",
+            "type": "u8"
+          },
+          {
+            "name": "audited_winner",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Phase",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Lobby"
+          },
+          {
+            "name": "Commit"
+          },
+          {
+            "name": "Fire"
+          },
+          {
+            "name": "Respond"
+          },
+          {
+            "name": "Audit"
+          },
+          {
+            "name": "VerifiedFinished"
+          },
+          {
+            "name": "NoVerifiedWinner"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ShipPlacement",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "x",
+            "type": "u8"
+          },
+          {
+            "name": "y",
+            "type": "u8"
+          },
+          {
+            "name": "vertical",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ShotVerified",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "attacker",
+            "type": "pubkey"
+          },
+          {
+            "name": "defender",
+            "type": "pubkey"
+          },
+          {
+            "name": "index",
+            "type": "u8"
+          },
+          {
+            "name": "is_ship",
+            "type": "bool"
+          },
+          {
+            "name": "root",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

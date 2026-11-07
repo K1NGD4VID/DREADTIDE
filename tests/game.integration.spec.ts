@@ -1,17 +1,17 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { AnchorProvider, BN, Program, Wallet } from "@anchor-lang/core";
 import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { occupancy, proof, salt, tree } from "../app/lib/crypto/merkle";
+import type { Dreadtide } from "../app/idl/dreadtide";
+import idl from "../app/idl/dreadtide.json";
 
 describe("local validator match", () => {
   it("accepts a real proof, rejects a forged one, and enforces turn state", async () => {
-    const idl = JSON.parse(readFileSync("target/idl/dreadtide.json", "utf8"));
     const connection = new Connection("http://127.0.0.1:8899", "confirmed");
     const creator = Keypair.generate();
     const opponent = Keypair.generate();
     const provider = new AnchorProvider(connection, new Wallet(creator), { commitment: "confirmed" });
-    const program = new Program(idl, provider);
+    const program = new Program<Dreadtide>(idl as Dreadtide, provider);
     const programId = new PublicKey(idl.address);
     const gameId = 42n;
     const gameIdBytes = Buffer.alloc(8);
@@ -48,7 +48,7 @@ describe("local validator match", () => {
     await expect(program.methods.respond(true, wrongSalt, siblings).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc()).rejects.toThrow();
     await program.methods.respond(true, cellSalt, siblings).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
 
-    const state = await (program.account as any).game.fetch(gamePda) as { hits: number[]; shots: BN[]; phase: unknown; turn: number };
+    const state = await program.account.game.fetch(gamePda);
     expect(state.hits[1]).toBe(1);
     expect(state.shots[1].toString()).toBe((1n << 18n).toString());
     expect(state.phase).toEqual({ fire: {} });

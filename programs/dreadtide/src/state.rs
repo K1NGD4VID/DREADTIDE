@@ -1,3 +1,4 @@
+use crate::{crypto, fleet};
 use anchor_lang::prelude::*;
 
 pub const ACTION_SECONDS: i64 = 120;
@@ -33,6 +34,13 @@ pub struct Game {
     pub claimant: u8,
     pub audit_attempts: u8,
     pub audited_winner: u8,
+}
+
+pub struct ShotResult {
+    pub attacker: u8,
+    pub defender: u8,
+    pub index: u8,
+    pub is_ship: bool,
 }
 
 impl Game {
@@ -78,6 +86,123 @@ impl Game {
             self.enter_audit(other, now)?;
         }
         Ok(())
+    }
+
+    pub fn fire(&mut self, signer: &Pubkey, index: u8, now: i64) -> Result<()> {
+        require!(self.phase == Phase::Fire, DreadtideError::WrongPhase);
+        require!(now <= self.deadline, DreadtideError::DeadlinePassed);
+        require!(index < 64, DreadtideError::InvalidCell);
+        let attacker = self.player_index(signer).ok_or(DreadtideError::NotPlayer)?;
+        require!(attacker == self.turn, DreadtideError::WrongPlayer);
+        let defender = (1 - attacker) as usize;
+        require!(
+            self.shots[defender] & (1u64 << index) == 0,
+            DreadtideError::DuplicateShot
+        );
+        self.pending_index = index;
+        self.pending_attacker = attacker;
+        self.phase = Phase::Respond;
+        self.deadline = now
+            .checked_add(ACTION_SECONDS)
+            .ok_or(DreadtideError::ClockOverflow)?;
+        Ok(())
+    }
+
+    pub fn respond(
+        &mut self,
+        signer: &Pubkey,
+        is_ship: bool,
+        cell_salt: &crypto::Hash,
+        siblings: &crypto::Proof,
+        now: i64,
+    ) -> Result<ShotResult> {
+        require!(self.phase == Phase::Respond, DreadtideError::WrongPhase);
+        require!(now <= self.deadline, DreadtideError::DeadlinePassed);
+        let defender = self.player_index(signer).ok_or(DreadtideError::NotPlayer)?;
+        require!(
+            defender == 1 - self.pending_attacker,
+            DreadtideError::WrongPlayer
+        );
+        let index = self.pending_index;
+        require!(
+            crypto::verify(
+                &self.roots[defender as usize],
+                self.game_id,
+                &signer.to_bytes(),
+                index,
+                is_ship,
+                cell_salt,
+                siblings
+            ),
+            DreadtideError::InvalidProof
+        );
+        self.shots[defender as usize] |= 1u64 << index;
+        if is_ship {
+            self.hits[defender as usize] = self.hits[defender as usize]
+                .checked_add(1)
+                .ok_or(DreadtideError::InvalidCell)?;
+        }
+        let attacker = self.pending_attacker;
+        self.pending_index = u8::MAX;
+        self.pending_attacker = u8::MAX;
+        if self.hits[defender as usize] == 12 {
+            self.enter_audit(attacker, now)?;
+        } else {
+            self.phase = Phase::Fire;
+            self.turn = defender;
+            self.deadline = now
+                .checked_add(ACTION_SECONDS)
+                .ok_or(DreadtideError::ClockOverflow)?;
+        }
+        Ok(ShotResult {
+            attacker,
+            defender,
+            index,
+            is_ship,
+        })
+    }
+
+    pub fn claim_timeout(&mut self, now: i64) -> Result<()> {
+        require!(now > self.deadline, DreadtideError::DeadlineNotPassed);
+        match self.phase {
+            Phase::Lobby => self.phase = Phase::Cancelled,
+            Phase::Commit => match self.committed {
+                [true, false] => self.enter_audit(0, now)?,
+                [false, true] => self.enter_audit(1, now)?,
+                _ => self.phase = Phase::NoVerifiedWinner,
+            },
+            Phase::Fire => self.enter_audit(1 - self.turn, now)?,
+            Phase::Respond => self.enter_audit(self.pending_attacker, now)?,
+            Phase::Audit => self.fail_audit(now)?,
+            _ => return err!(DreadtideError::WrongPhase),
+        }
+        Ok(())
+    }
+
+    pub fn audit_board(
+        &mut self,
+        signer: &Pubkey,
+        seed: &crypto::Hash,
+        ships: &[fleet::Ship; 4],
+        now: i64,
+    ) -> Result<bool> {
+        require!(self.phase == Phase::Audit, DreadtideError::WrongPhase);
+        require!(now <= self.deadline, DreadtideError::DeadlinePassed);
+        let claimant = self.player_index(signer).ok_or(DreadtideError::NotPlayer)?;
+        require!(claimant == self.claimant, DreadtideError::WrongPlayer);
+        let valid = fleet::occupancy(ships)
+            .map(|board| {
+                crypto::root(self.game_id, &signer.to_bytes(), seed, &board)
+                    == self.roots[claimant as usize]
+            })
+            .unwrap_or(false);
+        if valid {
+            self.phase = Phase::VerifiedFinished;
+            self.audited_winner = claimant;
+        } else {
+            self.fail_audit(now)?;
+        }
+        Ok(valid)
     }
 }
 

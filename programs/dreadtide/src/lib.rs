@@ -83,26 +83,9 @@ pub mod dreadtide {
 
     pub fn fire(ctx: Context<PlayerAction>, index: u8) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let game = &mut ctx.accounts.game;
-        require!(game.phase == Phase::Fire, DreadtideError::WrongPhase);
-        require!(now <= game.deadline, DreadtideError::DeadlinePassed);
-        require!(index < 64, DreadtideError::InvalidCell);
-        let attacker = game
-            .player_index(&ctx.accounts.player.key())
-            .ok_or(DreadtideError::NotPlayer)?;
-        require!(attacker == game.turn, DreadtideError::WrongPlayer);
-        let defender = (1 - attacker) as usize;
-        require!(
-            game.shots[defender] & (1u64 << index) == 0,
-            DreadtideError::DuplicateShot
-        );
-        game.pending_index = index;
-        game.pending_attacker = attacker;
-        game.phase = Phase::Respond;
-        game.deadline = now
-            .checked_add(ACTION_SECONDS)
-            .ok_or(DreadtideError::ClockOverflow)?;
-        Ok(())
+        ctx.accounts
+            .game
+            .fire(&ctx.accounts.player.key(), index, now)
     }
 
     pub fn respond(
@@ -113,80 +96,27 @@ pub mod dreadtide {
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let game = &mut ctx.accounts.game;
-        require!(game.phase == Phase::Respond, DreadtideError::WrongPhase);
-        require!(now <= game.deadline, DreadtideError::DeadlinePassed);
-        let defender = game
-            .player_index(&ctx.accounts.player.key())
-            .ok_or(DreadtideError::NotPlayer)?;
-        require!(
-            defender == 1 - game.pending_attacker,
-            DreadtideError::WrongPlayer
-        );
-        let index = game.pending_index;
-        require!(
-            crypto::verify(
-                &game.roots[defender as usize],
-                game.game_id,
-                &ctx.accounts.player.key().to_bytes(),
-                index,
-                is_ship,
-                &cell_salt,
-                &siblings
-            ),
-            DreadtideError::InvalidProof
-        );
-        game.shots[defender as usize] |= 1u64 << index;
-        if is_ship {
-            game.hits[defender as usize] = game.hits[defender as usize]
-                .checked_add(1)
-                .ok_or(DreadtideError::InvalidCell)?;
-        }
+        let shot = game.respond(
+            &ctx.accounts.player.key(),
+            is_ship,
+            &cell_salt,
+            &siblings,
+            now,
+        )?;
         emit!(state::ShotVerified {
             game: game.key(),
-            attacker: game.player(game.pending_attacker),
+            attacker: game.player(shot.attacker),
             defender: ctx.accounts.player.key(),
-            index,
-            is_ship,
-            root: game.roots[defender as usize],
+            index: shot.index,
+            is_ship: shot.is_ship,
+            root: game.roots[shot.defender as usize],
         });
-        let attacker = game.pending_attacker;
-        game.pending_index = u8::MAX;
-        game.pending_attacker = u8::MAX;
-        if game.hits[defender as usize] == 12 {
-            game.enter_audit(attacker, now)?;
-        } else {
-            game.phase = Phase::Fire;
-            game.turn = defender;
-            game.deadline = now
-                .checked_add(ACTION_SECONDS)
-                .ok_or(DreadtideError::ClockOverflow)?;
-        }
         Ok(())
     }
 
     pub fn claim_timeout(ctx: Context<ClaimTimeout>) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
-        let game = &mut ctx.accounts.game;
-        require!(now > game.deadline, DreadtideError::DeadlineNotPassed);
-        match game.phase {
-            Phase::Lobby => game.phase = Phase::Cancelled,
-            Phase::Commit => match game.committed {
-                [true, false] => game.enter_audit(0, now)?,
-                [false, true] => game.enter_audit(1, now)?,
-                _ => game.phase = Phase::NoVerifiedWinner,
-            },
-            Phase::Fire => {
-                let beneficiary = 1 - game.turn;
-                game.enter_audit(beneficiary, now)?;
-            }
-            Phase::Respond => {
-                let beneficiary = game.pending_attacker;
-                game.enter_audit(beneficiary, now)?;
-            }
-            Phase::Audit => game.fail_audit(now)?,
-            _ => return err!(DreadtideError::WrongPhase),
-        }
-        Ok(())
+        ctx.accounts.game.claim_timeout(now)
     }
 
     pub fn audit_board(
@@ -196,30 +126,13 @@ pub mod dreadtide {
     ) -> Result<()> {
         let now = Clock::get()?.unix_timestamp;
         let game = &mut ctx.accounts.game;
-        require!(game.phase == Phase::Audit, DreadtideError::WrongPhase);
-        require!(now <= game.deadline, DreadtideError::DeadlinePassed);
-        let claimant = game
-            .player_index(&ctx.accounts.player.key())
-            .ok_or(DreadtideError::NotPlayer)?;
-        require!(claimant == game.claimant, DreadtideError::WrongPlayer);
         let ships = placements.map(|ship| fleet::Ship {
             x: ship.x,
             y: ship.y,
             vertical: ship.vertical,
         });
-        let valid = fleet::occupancy(&ships)
-            .map(|board| {
-                crypto::root(
-                    game.game_id,
-                    &ctx.accounts.player.key().to_bytes(),
-                    &seed,
-                    &board,
-                ) == game.roots[claimant as usize]
-            })
-            .unwrap_or(false);
+        let valid = game.audit_board(&ctx.accounts.player.key(), &seed, &ships, now)?;
         if valid {
-            game.phase = Phase::VerifiedFinished;
-            game.audited_winner = claimant;
             emit!(state::AuditAccepted {
                 game: game.key(),
                 winner: ctx.accounts.player.key()
@@ -229,7 +142,6 @@ pub mod dreadtide {
                 game: game.key(),
                 claimant: ctx.accounts.player.key()
             });
-            game.fail_audit(now)?;
         }
         Ok(())
     }
