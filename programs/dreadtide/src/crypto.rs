@@ -1,33 +1,26 @@
-use sha2::{Digest, Sha256};
+use solana_sha256_hasher::hashv;
 
 pub type Hash = [u8; 32];
 pub type Proof = [Hash; 6];
 
 pub fn salt(seed: &Hash, index: u8) -> Hash {
-    let mut hasher = Sha256::new();
-    hasher.update(b"DT-SALT");
-    hasher.update(seed);
-    hasher.update([index]);
-    hasher.finalize().into()
+    hashv(&[b"DT-SALT", seed, &[index]]).to_bytes()
 }
 
 pub fn leaf(game_id: u64, player: &Hash, index: u8, is_ship: bool, cell_salt: &Hash) -> Hash {
-    let mut hasher = Sha256::new();
-    hasher.update([0]);
-    hasher.update(game_id.to_le_bytes());
-    hasher.update(player);
-    hasher.update([index]);
-    hasher.update([u8::from(is_ship)]);
-    hasher.update(cell_salt);
-    hasher.finalize().into()
+    hashv(&[
+        &[0],
+        &game_id.to_le_bytes(),
+        player,
+        &[index],
+        &[u8::from(is_ship)],
+        cell_salt,
+    ])
+    .to_bytes()
 }
 
 pub fn node(left: &Hash, right: &Hash) -> Hash {
-    let mut hasher = Sha256::new();
-    hasher.update([1]);
-    hasher.update(left);
-    hasher.update(right);
-    hasher.finalize().into()
+    hashv(&[&[1], left, right]).to_bytes()
 }
 
 pub fn root(game_id: u64, player: &Hash, seed: &Hash, board: &[bool; 64]) -> Hash {
