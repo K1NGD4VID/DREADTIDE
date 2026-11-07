@@ -79,6 +79,11 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(58px, 6.5vw, 82px); line-heig
 .console-card input:focus { border-color:var(--signal); }
 .console-card button { margin-top:12px; min-height:44px; border:1px solid var(--signal); background:var(--signal); color:#001019; font:800 11px monospace; letter-spacing:.08em; cursor:pointer; }
 .console-card button:disabled { opacity:.4; cursor:not-allowed; }
+.share-match { display:grid; gap:10px; margin-top:18px; padding-top:18px; border-top:1px solid var(--line); }
+.share-match span { color:var(--signal); font:700 10px/1 monospace; letter-spacing:.1em; }
+.share-match code { overflow-wrap:anywhere; color:var(--ink); font:700 11px/1.45 monospace; }
+.console-card .secondary-console-action { margin-top:2px; border-color:var(--line); background:transparent; color:var(--ink); }
+.console-card .secondary-console-action:hover { border-color:var(--signal); color:var(--signal); }
 .status-lines { display:grid; gap:14px; margin:22px 0 18px; }
 .status-lines span { display:flex; justify-content:space-between; gap:16px; color:var(--muted); font:700 10px monospace; }
 .status-lines b { color:var(--ink); font-weight:700; text-align:right; }
