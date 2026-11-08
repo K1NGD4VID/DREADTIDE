@@ -1,14 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnchorProvider, BN, EventParser, Program } from "@anchor-lang/core";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { PublicKey, SystemProgram } from "@solana/web3.js";
+import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import idl from "./idl/dreadtide.json";
 import type { Dreadtide } from "./idl/dreadtide";
 import { occupancy, proof, salt, tree } from "./lib/crypto/merkle";
 import { FleetDeployment } from "./fleet-deployment";
 import { emptyFleet, validateFleet, type FleetPlacement } from "./lib/game/fleet";
+import { botProgram, botStorageKey, chooseBotTarget, createBotRecord, restoreBot, type BotRecord } from "./lib/game/browser-bot";
 import { BattleArena, type BattleState } from "./battle-arena";
 import type { ShotOutcome } from "./lib/game/battle";
 
@@ -80,7 +81,7 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export function GameConsole() {
   const { connection } = useConnection();
-  const { connected, publicKey, signAllTransactions, signTransaction } = useWallet();
+  const { connected, publicKey, signAllTransactions, signTransaction, sendTransaction } = useWallet();
   const [gameId, setGameId] = useState("Generated on create");
   const [activeGameAddress, setActiveGameAddress] = useState("");
   const [joinAddress, setJoinAddress] = useState("");
@@ -99,6 +100,7 @@ export function GameConsole() {
   const [playerIndex, setPlayerIndex] = useState(-1);
   const [battleState, setBattleState] = useState<BattleState>({ creator: "", opponent: "", turn: 0, pendingIndex: 255, pendingAttacker: 255, shots: [0n, 0n], hits: [0, 0], claimant: 255, auditedWinner: 255 });
   const [history, setHistory] = useState<ShotOutcome[]>([]);
+  const botBusy = useRef(false);
 
   const wallet = useMemo<any>(() => {
     if (!publicKey || !signTransaction || !signAllTransactions) return null;
@@ -201,6 +203,48 @@ export function GameConsole() {
     void loadShotHistory();
   }, [activeGameAddress, battleState.shots, loadShotHistory, phase]);
   useEffect(() => {
+    if (!activeGameAddress || botBusy.current) return;
+    const stored = localStorage.getItem(botStorageKey(activeGameAddress));
+    if (!stored) return;
+    const runBot = async () => {
+      botBusy.current = true;
+      try {
+        const record = JSON.parse(stored) as BotRecord;
+        if (record.schemaVersion !== 1 || record.matchAddress !== activeGameAddress) throw new Error("Invalid browser bot record.");
+        const { keypair: bot, fleet: botFleet } = restoreBot(record);
+        const opponentProgram = botProgram(connection, bot);
+        const game = new PublicKey(activeGameAddress);
+        const state = await opponentProgram.account.game.fetch(game) as any;
+        const currentPhase = phaseName(state.phase);
+        if (!bot.publicKey.equals(state.opponent)) return;
+        if (currentPhase === "commit" && !state.committed[1]) {
+          await opponentProgram.methods.commitBoard(record.root).accountsStrict({ game, player: bot.publicKey }).rpc();
+          setMessage("Browser bot locked its hidden fleet. Waiting for your commitment.");
+        } else if (currentPhase === "fire" && state.turn === 1) {
+          const target = chooseBotTarget(BigInt(state.shots[0].toString()));
+          await opponentProgram.methods.fire(target).accountsStrict({ game, player: bot.publicKey }).rpc();
+          setMessage(`Browser bot fired at ${String.fromCharCode(65 + target % 8)}${Math.floor(target / 8) + 1}. Prove the result from your fleet.`);
+        } else if (currentPhase === "respond" && state.pendingAttacker === 0) {
+          const index = state.pendingIndex;
+          const board = occupancy(botFleet);
+          const seed = Uint8Array.from(record.seed);
+          const levels = await tree(BigInt(state.gameId.toString()), bot.publicKey.toBytes(), seed, board);
+          await opponentProgram.methods.respond(board[index], Array.from(await salt(seed, index)), proof(levels, index).map((item) => Array.from(item))).accountsStrict({ game, player: bot.publicKey }).rpc();
+          setMessage(`Bot proof verified: your shot at ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1} was a ${board[index] ? "hit" : "miss"}.`);
+        } else if (currentPhase === "audit" && state.claimant === 1) {
+          await opponentProgram.methods.auditBoard(record.seed, record.placements).accountsStrict({ game, player: bot.publicKey }).rpc();
+          setMessage("Browser bot completed its fleet audit. Final result confirmed on Devnet.");
+        } else return;
+        await refresh(activeGameAddress);
+        await loadShotHistory(activeGameAddress);
+      } catch (error) {
+        setMessage(errorMessage(error, "The browser bot paused. Keep this tab open and refresh the match to resume it."));
+      } finally { botBusy.current = false; }
+    };
+    const timer = window.setTimeout(() => void runBot(), 900);
+    return () => window.clearTimeout(timer);
+  }, [activeGameAddress, battleState.pendingIndex, battleState.shots, battleState.turn, connection, loadShotHistory, phase, refresh]);
+  useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -232,6 +276,30 @@ export function GameConsole() {
       await refresh(pda.toBase58());
       setMessage("Match created. Copy the address below and send it to a different wallet.");
     } catch (error) { setMessage(errorMessage(error, "Create transaction failed.")); }
+    finally { setBusy(false); }
+  }
+
+  async function startSoloGame() {
+    if (!program || !publicKey) return;
+    setBusy(true); setMessage("Creating your solo Devnet match...");
+    try {
+      const id = uniqueGameId();
+      const idBytes = Buffer.alloc(8); idBytes.writeBigUInt64LE(id);
+      const [game] = PublicKey.findProgramAddressSync([Buffer.from("game"), publicKey.toBuffer(), idBytes], PROGRAM_ID);
+      await program.methods.createGame(new BN(id.toString())).accountsStrict({ game, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
+      const record = await createBotRecord(game.toBase58(), id);
+      const { keypair: bot } = restoreBot(record);
+      setMessage("Approve 0.01 Devnet SOL to fund the local bot's transaction fees. This has no real-world value.");
+      const fundingSignature = await sendTransaction(new Transaction().add(SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: bot.publicKey, lamports: Math.round(.01 * LAMPORTS_PER_SOL) })), connection);
+      await connection.confirmTransaction(fundingSignature, "confirmed");
+      const opponentProgram = botProgram(connection, bot);
+      await opponentProgram.methods.joinGame().accountsStrict({ game, opponent: bot.publicKey }).rpc();
+      localStorage.setItem(botStorageKey(game.toBase58()), JSON.stringify(record));
+      localStorage.setItem(`dreadtide-match:${publicKey.toBase58()}`, game.toBase58());
+      setGameId(id.toString()); setActiveGameAddress(game.toBase58()); setRole("Creator"); setPhase("COMMIT"); setPlayers("Browser bot joined"); setCommitted("0 / 2");
+      await refresh(game.toBase58());
+      setMessage("Solo opponent online. Deploy and lock your fleet; the bot will handle its turns automatically while this tab remains open.");
+    } catch (error) { setMessage(errorMessage(error, "Could not start the solo match.")); }
     finally { setBusy(false); }
   }
 
@@ -462,7 +530,7 @@ export function GameConsole() {
       </div>
       {!connected ? <div className="console-empty"><div><h3>Watch the battle live.</h3><p>Paste any DREADTIDE match address to follow its public on-chain state. No wallet is required.</p></div><div className="spectator-entry"><label htmlFor="watch-address">MATCH ADDRESS</label><input id="watch-address" value={watchAddress} onChange={(event) => setWatchAddress(event.target.value.trim())} placeholder="Paste a Devnet game account" /><button disabled={busy || !watchAddress} onClick={watchGame}>{busy ? "LOADING..." : "WATCH MATCH"}</button></div><p className="connect-note">Connect Phantom or Solflare to command a fleet.</p></div> : (
         <div className="console-grid">
-          <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Generate a fresh game account with a 15 minute invitation window.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE FRESH MATCH"}</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
+          <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Challenge another captain or launch a local browser opponent on Devnet.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE PVP MATCH"}</button><button className="secondary-console-action" disabled={busy} onClick={startSoloGame}>PLAY VS BROWSER BOT</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
           <div className="console-card join-card"><span className="step">02</span><h3>Join or resume</h3><p>Join a new opponent match, or restore a match already owned by this wallet.</p><label htmlFor="join-address">Game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={resumeGame}>RESUME MY MATCH</button></div>
           <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={phase !== "COMMIT" || myCommitted} onClick={() => document.getElementById("fleet-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{myCommitted ? "FLEET COMMITTED" : phase === "COMMIT" ? "DEPLOY FLEET BELOW" : "AWAITING OPPONENT"}</button></div>
         </div>
