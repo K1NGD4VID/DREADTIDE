@@ -207,11 +207,46 @@ fn tied_battle_at_five_minutes_has_no_winner() {
 }
 
 #[test]
-fn signed_forfeit_awards_the_match_to_the_opponent() {
-    let (mut game, _, _, _) = committed_game();
+fn signed_forfeit_requires_the_opponents_board_audit() {
+    let (mut game, _, seed1, _) = committed_game();
     let creator = game.creator;
-    let winner = game.forfeit(&creator).unwrap();
+    let opponent = game.opponent;
+    let winner = game.forfeit(&creator, 1_000).unwrap();
     assert_eq!(winner, 1);
+    assert_eq!(game.phase, Phase::Audit);
+    assert_eq!(game.claimant, 1);
+    assert_eq!(game.audit_attempts, 1);
+    assert_eq!(game.audited_winner, u8::MAX);
+    assert!(game
+        .audit_board(&opponent, &seed1, &ships(), 1_001)
+        .unwrap());
     assert_eq!(game.phase, Phase::VerifiedFinished);
     assert_eq!(game.audited_winner, 1);
+}
+
+#[test]
+fn forfeiture_claimant_failure_cannot_award_the_forfeiter() {
+    let (mut game, _, _, _) = committed_game();
+    let creator = game.creator;
+    let opponent = game.opponent;
+    game.forfeit(&creator, 1_000).unwrap();
+    let mut illegal = ships();
+    illegal[0].x = 7;
+    assert!(!game
+        .audit_board(&opponent, &[8; 32], &illegal, 1_001)
+        .unwrap());
+    assert_eq!(game.phase, Phase::NoVerifiedWinner);
+    assert_eq!(game.audit_attempts, 3);
+    assert_eq!(game.audited_winner, u8::MAX);
+}
+
+#[test]
+fn forfeit_before_opponent_commit_has_no_verified_winner() {
+    let (mut game, _, _, _) = committed_game();
+    game.committed[1] = false;
+    let creator = game.creator;
+    game.forfeit(&creator, 1_000).unwrap();
+    assert_eq!(game.phase, Phase::NoVerifiedWinner);
+    assert_eq!(game.claimant, u8::MAX);
+    assert_eq!(game.audited_winner, u8::MAX);
 }

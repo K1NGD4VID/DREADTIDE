@@ -434,11 +434,11 @@ export function GameConsole() {
   }
 
   async function forfeitGame() {
-    if (!publicKey || !activeGameAddress || !window.confirm("Exit this match and forfeit it? Your opponent will win and receive any D-Coin pot. This cannot be undone.")) return;
+    if (!publicKey || !activeGameAddress || !window.confirm("Exit and concede this match? Your opponent must still audit their committed fleet before any D-Coin pot can be paid. This cannot be undone.")) return;
     setBusy(true); setMessage("Submitting your match forfeit to Devnet...");
     try {
       await program.methods.forfeitGame().accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
-      await refresh(); setMessage("Match forfeited. Your opponent is the verified winner.");
+      await refresh(); setMessage("Match conceded. Your opponent is the provisional claimant and must pass their fleet audit before settlement.");
     } catch (error) { setMessage(errorMessage(error, "Could not forfeit this match.")); }
     finally { setBusy(false); }
   }

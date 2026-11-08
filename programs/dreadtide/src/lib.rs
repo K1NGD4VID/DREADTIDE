@@ -162,8 +162,9 @@ pub mod dreadtide {
     }
 
     pub fn forfeit_game(ctx: Context<PlayerAction>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
         let game = &mut ctx.accounts.game;
-        let winner = game.forfeit(&ctx.accounts.player.key())?;
+        let winner = game.forfeit(&ctx.accounts.player.key(), now)?;
         emit!(state::MatchForfeited {
             game: game.key(),
             forfeiter: ctx.accounts.player.key(),

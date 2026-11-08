@@ -67,7 +67,7 @@ impl Game {
         }
     }
 
-    pub fn forfeit(&mut self, signer: &Pubkey) -> Result<u8> {
+    pub fn forfeit(&mut self, signer: &Pubkey, now: i64) -> Result<u8> {
         require!(
             !matches!(
                 self.phase,
@@ -81,11 +81,20 @@ impl Game {
         );
         let forfeiter = self.player_index(signer).ok_or(DreadtideError::NotPlayer)?;
         let winner = 1 - forfeiter;
-        self.phase = Phase::VerifiedFinished;
-        self.audited_winner = winner;
-        self.claimant = winner;
+        // A forfeit concedes competition, not board validity. Mark the
+        // forfeiter ineligible so a failed opponent audit cannot hand the
+        // match back to them, then require the opponent's committed board to
+        // pass the same audit used by every other victory path.
+        self.audit_attempts |= 1 << forfeiter;
+        self.audited_winner = u8::MAX;
         self.pending_index = u8::MAX;
         self.pending_attacker = u8::MAX;
+        if self.committed[winner as usize] {
+            self.enter_audit(winner, now)?;
+        } else {
+            self.claimant = u8::MAX;
+            self.phase = Phase::NoVerifiedWinner;
+        }
         Ok(winner)
     }
 
