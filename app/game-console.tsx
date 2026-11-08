@@ -1,14 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnchorProvider, BN, Program } from "@anchor-lang/core";
+import { AnchorProvider, BN, EventParser, Program } from "@anchor-lang/core";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import idl from "./idl/dreadtide.json";
 import type { Dreadtide } from "./idl/dreadtide";
-import { occupancy, tree } from "./lib/crypto/merkle";
+import { occupancy, proof, salt, tree } from "./lib/crypto/merkle";
 import { FleetDeployment } from "./fleet-deployment";
 import { emptyFleet, validateFleet, type FleetPlacement } from "./lib/game/fleet";
+import { BattleArena, type BattleState } from "./battle-arena";
+import type { ShotOutcome } from "./lib/game/battle";
 
 const PROGRAM_ID = new PublicKey(idl.address);
 const EMPTY_KEY = new PublicKey(new Uint8Array(32));
@@ -65,6 +67,10 @@ function errorMessage(error: unknown, fallback: string): string {
   if (value.includes("NotPlayer")) return "This wallet is not one of the two captains in this match.";
   if (value.includes("WrongPlayer")) return "It is the other captain's turn to take this action.";
   if (value.includes("AlreadyCommitted")) return "This wallet has already committed its fleet.";
+  if (value.includes("DuplicateShot")) return "That coordinate was already attacked. Choose an untried cell.";
+  if (value.includes("InvalidProof")) return "The fleet proof did not match the committed root. Restore the original recovery file.";
+  if (value.includes("DeadlineNotPassed")) return "The action window is still open. Timeout resolution becomes available after the countdown expires.";
+  if (value.includes("NoEligibleClaimant")) return "Neither player has a committed fleet eligible for this timeout result.";
   if (value.includes("AccountAlreadyInUse") || value.includes("already in use")) return "That match identifier was already used. Press Create Match again for a fresh one.";
   if (value.toLowerCase().includes("insufficient") || value.toLowerCase().includes("0x1")) return "This wallet needs Devnet SOL to pay the transaction fee.";
   if (value.toLowerCase().includes("reject") || value.toLowerCase().includes("cancel")) return "The wallet request was cancelled. No transaction was sent.";
@@ -89,6 +95,9 @@ export function GameConsole() {
   const [fleet, setFleet] = useState<FleetPlacement[]>(() => emptyFleet());
   const [hasRecovery, setHasRecovery] = useState(false);
   const [message, setMessage] = useState("Connect a wallet to create or join a match.");
+  const [playerIndex, setPlayerIndex] = useState(-1);
+  const [battleState, setBattleState] = useState<BattleState>({ creator: "", opponent: "", turn: 0, pendingIndex: 255, pendingAttacker: 255, shots: [0n, 0n], hits: [0, 0], claimant: 255, auditedWinner: 255 });
+  const [history, setHistory] = useState<ShotOutcome[]>([]);
 
   const wallet = useMemo<any>(() => {
     if (!publicKey || !signTransaction || !signAllTransactions) return null;
@@ -111,9 +120,12 @@ export function GameConsole() {
       setPlayers(state.opponent?.toBase58?.() && state.opponent.toBase58() !== EMPTY_KEY.toBase58() ? "Opponent joined" : "Waiting for opponent");
       setGameId(state.gameId.toString());
       setDeadline(Number(state.deadline.toString()));
-      if (publicKey?.equals(state.creator)) setRole("Creator");
-      else if (publicKey?.equals(state.opponent)) setRole("Opponent");
+      const index = publicKey?.equals(state.creator) ? 0 : publicKey?.equals(state.opponent) ? 1 : -1;
+      setPlayerIndex(index);
+      if (index === 0) setRole("Creator");
+      else if (index === 1) setRole("Opponent");
       else setRole("Spectator");
+      setBattleState({ creator: state.creator.toBase58(), opponent: state.opponent.toBase58(), turn: state.turn, pendingIndex: state.pendingIndex, pendingAttacker: state.pendingAttacker, shots: [BigInt(state.shots[0].toString()), BigInt(state.shots[1].toString())], hits: [state.hits[0], state.hits[1]], claimant: state.claimant, auditedWinner: state.auditedWinner });
     } catch {
       setMessage("Could not read that game account. Check the address and Devnet network.");
     }
@@ -128,7 +140,34 @@ export function GameConsole() {
     setDeadline(0);
     setCommitted("0 / 2");
     setMyCommitted(false);
+    setPlayerIndex(-1);
+    setHistory([]);
   }, [walletAddress]);
+
+  const loadShotHistory = useCallback(async (address = activeGameAddress) => {
+    if (!program || !address) return;
+    try {
+      const game = new PublicKey(address);
+      const signatures = await connection.getSignaturesForAddress(game, { limit: 100 }, "confirmed");
+      const transactions = await connection.getTransactions(signatures.map((item) => item.signature), { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+      const parser = new EventParser(PROGRAM_ID, program.coder);
+      const events: ShotOutcome[] = [];
+      for (let index = transactions.length - 1; index >= 0; index -= 1) {
+        const transaction = transactions[index];
+        const logs = transaction?.meta?.logMessages;
+        if (!logs) continue;
+        for (const event of parser.parseLogs(logs)) {
+          if (event.name !== "shotVerified") continue;
+          const data = event.data as any;
+          if (data.game.toBase58() !== address) continue;
+          events.push({ signature: signatures[index].signature, slot: signatures[index].slot, attacker: data.attacker.toBase58(), defender: data.defender.toBase58(), index: data.index, isShip: Boolean(data.isShip ?? data.is_ship) });
+        }
+      }
+      setHistory(events);
+    } catch {
+      setMessage("Battle state is live, but historical shot evidence could not be loaded yet.");
+    }
+  }, [activeGameAddress, connection, program]);
   useEffect(() => {
     if (!walletAddress || !activeGameAddress) {
       setFleet(emptyFleet());
@@ -158,6 +197,10 @@ export function GameConsole() {
     const timer = window.setInterval(() => void refresh(), 5_000);
     return () => window.clearInterval(timer);
   }, [connected, activeGameAddress, refresh]);
+  useEffect(() => {
+    if (!connected || !activeGameAddress || !["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER"].includes(phase)) return;
+    void loadShotHistory();
+  }, [activeGameAddress, battleState.shots, connected, loadShotHistory, phase]);
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(timer);
@@ -294,6 +337,93 @@ export function GameConsole() {
     }
   }
 
+  function requireSecret(): FleetSecret {
+    if (!publicKey || !activeGameAddress) throw new Error("Connect the match wallet first.");
+    const stored = localStorage.getItem(secretKey(activeGameAddress, publicKey.toBase58()));
+    if (!stored) throw new Error("Private fleet data is missing. Import your recovery file.");
+    const record = parseSecret(stored);
+    if (record.matchAddress !== activeGameAddress || record.playerAddress !== publicKey.toBase58() || record.gameId !== gameId) throw new Error("Private fleet data does not match this wallet and game.");
+    return record;
+  }
+
+  async function fireAt(index: number) {
+    if (!program || !publicKey || !activeGameAddress) return;
+    setBusy(true); setMessage(`Devnet fire transaction: target ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1}. Confirm in your wallet.`);
+    try {
+      const state = await program.account.game.fetch(new PublicKey(activeGameAddress)) as any;
+      const currentIndex = publicKey.equals(state.creator) ? 0 : publicKey.equals(state.opponent) ? 1 : -1;
+      if (phaseName(state.phase) !== "fire" || currentIndex < 0 || state.turn !== currentIndex) throw new Error("WrongPlayer");
+      const defender = 1 - currentIndex;
+      if ((BigInt(state.shots[defender].toString()) & (1n << BigInt(index))) !== 0n) throw new Error("DuplicateShot");
+      await program.methods.fire(index).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      await refresh();
+      setMessage("Attack confirmed. Waiting for the defender's cryptographic response.");
+    } catch (error) { setMessage(errorMessage(error, "Fire transaction failed.")); }
+    finally { setBusy(false); }
+  }
+
+  async function respondToShot() {
+    if (!program || !publicKey || !activeGameAddress) return;
+    setBusy(true); setMessage("Preparing the six-sibling Merkle proof from your private fleet...");
+    try {
+      const record = requireSecret();
+      const state = await program.account.game.fetch(new PublicKey(activeGameAddress)) as any;
+      if (phaseName(state.phase) !== "respond") throw new Error("WrongPhase");
+      const currentIndex = publicKey.equals(state.creator) ? 0 : publicKey.equals(state.opponent) ? 1 : -1;
+      if (currentIndex < 0 || currentIndex === state.pendingAttacker) throw new Error("WrongPlayer");
+      const index = state.pendingIndex;
+      const placements = record.placements.map((ship) => ({ ...ship, placed: true }));
+      const board = occupancy(placements);
+      const seed = Uint8Array.from(record.seed);
+      const levels = await tree(BigInt(record.gameId), publicKey.toBytes(), seed, board);
+      const cellSalt = await salt(seed, index);
+      const siblings = proof(levels, index).map((item) => Array.from(item));
+      setMessage(`Devnet response transaction: prove ${board[index] ? "hit" : "miss"} at ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1}. Confirm in your wallet.`);
+      await program.methods.respond(board[index], Array.from(cellSalt), siblings).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      await refresh();
+      await loadShotHistory();
+      setMessage(`Verified ${board[index] ? "hit" : "miss"}. The next turn is now live.`);
+    } catch (error) { setMessage(errorMessage(error, "Response transaction failed.")); }
+    finally { setBusy(false); }
+  }
+
+  async function claimTimeout() {
+    if (!program || !publicKey || !activeGameAddress) return;
+    setBusy(true); setMessage("Devnet timeout resolution transaction. Confirm in your wallet.");
+    try {
+      await program.methods.claimTimeout().accountsStrict({ game: new PublicKey(activeGameAddress), caller: publicKey }).rpc();
+      await refresh();
+      setMessage("Expired action resolved on-chain. The new match phase is confirmed.");
+    } catch (error) { setMessage(errorMessage(error, "Timeout transaction failed.")); }
+    finally { setBusy(false); }
+  }
+
+  async function auditFleet() {
+    if (!program || !publicKey || !activeGameAddress) return;
+    setBusy(true); setMessage("Preparing your original fleet for claimant verification...");
+    try {
+      const record = requireSecret();
+      const placements = record.placements.map(({ x, y, vertical }) => ({ x, y, vertical }));
+      setMessage("Devnet winner audit transaction. Your fleet is revealed to verify the result; confirm in your wallet.");
+      await program.methods.auditBoard(record.seed, placements).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      await refresh();
+      setMessage("Fleet audit confirmed. Final match result loaded from Devnet.");
+    } catch (error) { setMessage(errorMessage(error, "Fleet audit failed.")); }
+    finally { setBusy(false); }
+  }
+
+  function playAgain() {
+    if (walletAddress) localStorage.removeItem(`dreadtide-match:${walletAddress}`);
+    setActiveGameAddress("");
+    setJoinAddress("");
+    setGameId("Generated on create");
+    setFleet(emptyFleet());
+    setHistory([]);
+    setBattleState({ creator: "", opponent: "", turn: 0, pendingIndex: 255, pendingAttacker: 255, shots: [0n, 0n], hits: [0, 0], claimant: 255, auditedWinner: 255 });
+    setRole("Not assigned"); setPlayerIndex(-1); setPhase("LOBBY"); setDeadline(0); setCommitted("0 / 2"); setMyCommitted(false); setHasRecovery(false);
+    setMessage("Ready for a fresh match with new private commitments.");
+  }
+
   return (
     <section className="game-console" aria-labelledby="game-console-title">
       <div className="console-heading">
@@ -308,6 +438,7 @@ export function GameConsole() {
         </div>
       )}
       {connected && activeGameAddress && phase === "COMMIT" ? <FleetDeployment fleet={fleet} onChange={setFleet} onCommit={commitFleet} onExport={exportRecovery} onImport={importRecovery} committed={myCommitted} busy={busy} canCommit={deadline > clockNow} hasRecovery={hasRecovery} /> : null}
+      {connected && activeGameAddress && ["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <BattleArena phase={phase} playerIndex={playerIndex} state={battleState} fleet={fleet} history={history} deadlineExpired={deadline > 0 && deadline <= clockNow} busy={busy} hasRecovery={hasRecovery} onFire={fireAt} onRespond={respondToShot} onClaimTimeout={claimTimeout} onAudit={auditFleet} onPlayAgain={playAgain} /> : null}
       <p className="console-message" role="status">{message}</p>
     </section>
   );
