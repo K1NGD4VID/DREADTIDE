@@ -6,6 +6,8 @@ node_modules
 test-ledger
 .tmp-landbook-skill
 .git
+.env
+.env.*
 .github
 docs
 fixtures
