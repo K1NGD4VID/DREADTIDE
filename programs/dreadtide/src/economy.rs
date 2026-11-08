@@ -1,3 +1,4 @@
+use crate::state::DreadtideError;
 use anchor_lang::prelude::*;
 
 pub const DAILY_COINS: u64 = 100;
@@ -20,16 +21,16 @@ impl PlayerProfile {
         self.balance = self
             .balance
             .checked_add(amount)
-            .ok_or(EconomyError::ArithmeticOverflow)?;
+            .ok_or(DreadtideError::ArithmeticOverflow)?;
         Ok(())
     }
 
     pub fn debit(&mut self, amount: u64) -> Result<()> {
-        require!(self.balance >= amount, EconomyError::InsufficientDCoins);
+        require!(self.balance >= amount, DreadtideError::InsufficientDCoins);
         self.balance = self
             .balance
             .checked_sub(amount)
-            .ok_or(EconomyError::ArithmeticOverflow)?;
+            .ok_or(DreadtideError::ArithmeticOverflow)?;
         Ok(())
     }
 }
@@ -68,26 +69,6 @@ pub struct StakeSettled {
     pub winner: Pubkey,
     pub pot: u64,
     pub refunded: bool,
-}
-
-#[error_code]
-pub enum EconomyError {
-    #[msg("D-Coin arithmetic overflow")]
-    ArithmeticOverflow,
-    #[msg("Daily D-Coins have already been claimed today")]
-    DailyAlreadyClaimed,
-    #[msg("Stake must be at least 50 D-Coins")]
-    StakeBelowMinimum,
-    #[msg("D-Coin balance is too low")]
-    InsufficientDCoins,
-    #[msg("Stake has already been deposited")]
-    StakeAlreadyDeposited,
-    #[msg("Both players must escrow before settlement")]
-    StakeNotReady,
-    #[msg("Stake has already been settled")]
-    StakeAlreadySettled,
-    #[msg("Match is not ready for stake settlement")]
-    MatchNotFinished,
 }
 
 #[cfg(test)]

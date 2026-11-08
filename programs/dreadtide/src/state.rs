@@ -260,4 +260,20 @@ pub enum DreadtideError {
     NoEligibleClaimant,
     #[msg("Clock arithmetic overflow")]
     ClockOverflow,
+    #[msg("D-Coin arithmetic overflow")]
+    ArithmeticOverflow,
+    #[msg("Daily D-Coins have already been claimed today")]
+    DailyAlreadyClaimed,
+    #[msg("Stake must be at least 50 D-Coins")]
+    StakeBelowMinimum,
+    #[msg("D-Coin balance is too low")]
+    InsufficientDCoins,
+    #[msg("Stake has already been deposited")]
+    StakeAlreadyDeposited,
+    #[msg("Both players must escrow before settlement")]
+    StakeNotReady,
+    #[msg("Stake has already been settled")]
+    StakeAlreadySettled,
+    #[msg("Match is not ready for stake settlement")]
+    MatchNotFinished,
 }

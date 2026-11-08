@@ -13,6 +13,75 @@ export type Dreadtide = {
   },
   "instructions": [
     {
+      "name": "acceptStake",
+      "discriminator": [
+        170,
+        19,
+        179,
+        19,
+        105,
+        58,
+        250,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "game"
+        },
+        {
+          "name": "stake",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "opponentProfile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "opponent"
+              }
+            ]
+          }
+        },
+        {
+          "name": "opponent",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "auditBoard",
       "discriminator": [
         114,
@@ -83,6 +152,81 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "buyCoins",
+      "discriminator": [
+        210,
+        116,
+        3,
+        207,
+        17,
+        87,
+        42,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "coins",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "cancelGame",
       "discriminator": [
         121,
@@ -118,6 +262,50 @@ export type Dreadtide = {
                 "kind": "account",
                 "path": "game.gameId",
                 "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "claimDaily",
+      "discriminator": [
+        13,
+        226,
+        153,
+        154,
+        27,
+        168,
+        111,
+        103
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
               }
             ]
           }
@@ -289,6 +477,55 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "createProfile",
+      "discriminator": [
+        225,
+        205,
+        234,
+        143,
+        17,
+        186,
+        50,
+        220
+      ],
+      "accounts": [
+        {
+          "name": "profile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "fire",
       "discriminator": [
         42,
@@ -388,6 +625,85 @@ export type Dreadtide = {
       "args": []
     },
     {
+      "name": "openStake",
+      "discriminator": [
+        136,
+        215,
+        163,
+        130,
+        234,
+        194,
+        229,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "game"
+        },
+        {
+          "name": "stake",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorProfile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "creator"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "respond",
       "discriminator": [
         72,
@@ -461,6 +777,101 @@ export type Dreadtide = {
           }
         }
       ]
+    },
+    {
+      "name": "settleStake",
+      "discriminator": [
+        89,
+        179,
+        109,
+        99,
+        144,
+        236,
+        213,
+        76
+      ],
+      "accounts": [
+        {
+          "name": "game"
+        },
+        {
+          "name": "stake",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  116,
+                  97,
+                  107,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creatorProfile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "opponentProfile",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  111,
+                  102,
+                  105,
+                  108,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.opponent",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "signer": true
+        }
+      ],
+      "args": []
     }
   ],
   "accounts": [
@@ -475,6 +886,32 @@ export type Dreadtide = {
         100,
         121,
         18
+      ]
+    },
+    {
+      "name": "matchStake",
+      "discriminator": [
+        135,
+        81,
+        108,
+        247,
+        164,
+        23,
+        131,
+        40
+      ]
+    },
+    {
+      "name": "playerProfile",
+      "discriminator": [
+        82,
+        226,
+        99,
+        87,
+        164,
+        130,
+        181,
+        80
       ]
     }
   ],
@@ -506,6 +943,32 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "dCoinsPurchased",
+      "discriminator": [
+        33,
+        238,
+        140,
+        98,
+        40,
+        172,
+        152,
+        119
+      ]
+    },
+    {
+      "name": "dailyCoinsClaimed",
+      "discriminator": [
+        53,
+        151,
+        43,
+        13,
+        237,
+        9,
+        15,
+        18
+      ]
+    },
+    {
       "name": "shotVerified",
       "discriminator": [
         59,
@@ -516,6 +979,19 @@ export type Dreadtide = {
         149,
         248,
         27
+      ]
+    },
+    {
+      "name": "stakeSettled",
+      "discriminator": [
+        171,
+        53,
+        105,
+        171,
+        142,
+        65,
+        236,
+        232
       ]
     }
   ],
@@ -579,6 +1055,46 @@ export type Dreadtide = {
       "code": 6011,
       "name": "clockOverflow",
       "msg": "Clock arithmetic overflow"
+    },
+    {
+      "code": 6012,
+      "name": "arithmeticOverflow",
+      "msg": "D-Coin arithmetic overflow"
+    },
+    {
+      "code": 6013,
+      "name": "dailyAlreadyClaimed",
+      "msg": "Daily D-Coins have already been claimed today"
+    },
+    {
+      "code": 6014,
+      "name": "stakeBelowMinimum",
+      "msg": "Stake must be at least 50 D-Coins"
+    },
+    {
+      "code": 6015,
+      "name": "insufficientDCoins",
+      "msg": "D-Coin balance is too low"
+    },
+    {
+      "code": 6016,
+      "name": "stakeAlreadyDeposited",
+      "msg": "Stake has already been deposited"
+    },
+    {
+      "code": 6017,
+      "name": "stakeNotReady",
+      "msg": "Both players must escrow before settlement"
+    },
+    {
+      "code": 6018,
+      "name": "stakeAlreadySettled",
+      "msg": "Stake has already been settled"
+    },
+    {
+      "code": 6019,
+      "name": "matchNotFinished",
+      "msg": "Match is not ready for stake settlement"
     }
   ],
   "types": [
@@ -610,6 +1126,46 @@ export type Dreadtide = {
           {
             "name": "claimant",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dCoinsPurchased",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "coins",
+            "type": "u64"
+          },
+          {
+            "name": "lamports",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "dailyCoinsClaimed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "coins",
+            "type": "u64"
+          },
+          {
+            "name": "day",
+            "type": "i64"
           }
         ]
       }
@@ -716,6 +1272,38 @@ export type Dreadtide = {
       }
     },
     {
+      "name": "matchStake",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "amountPerPlayer",
+            "type": "u64"
+          },
+          {
+            "name": "creatorDeposited",
+            "type": "bool"
+          },
+          {
+            "name": "opponentDeposited",
+            "type": "bool"
+          },
+          {
+            "name": "settled",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "phase",
       "type": {
         "kind": "enum",
@@ -743,6 +1331,30 @@ export type Dreadtide = {
           },
           {
             "name": "cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "playerProfile",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "balance",
+            "type": "u64"
+          },
+          {
+            "name": "lastClaimDay",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
@@ -800,6 +1412,30 @@ export type Dreadtide = {
                 32
               ]
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "stakeSettled",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "pot",
+            "type": "u64"
+          },
+          {
+            "name": "refunded",
+            "type": "bool"
           }
         ]
       }

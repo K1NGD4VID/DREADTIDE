@@ -183,7 +183,7 @@ pub mod dreadtide {
         let profile = &mut ctx.accounts.profile;
         require!(
             day > profile.last_claim_day,
-            economy::EconomyError::DailyAlreadyClaimed
+            DreadtideError::DailyAlreadyClaimed
         );
         profile.credit(economy::DAILY_COINS)?;
         profile.last_claim_day = day;
@@ -196,10 +196,10 @@ pub mod dreadtide {
     }
 
     pub fn buy_coins(ctx: Context<BuyCoins>, coins: u64) -> Result<()> {
-        require!(coins > 0, economy::EconomyError::StakeBelowMinimum);
+        require!(coins > 0, DreadtideError::StakeBelowMinimum);
         let lamports = coins
             .checked_mul(economy::LAMPORTS_PER_DCOIN)
-            .ok_or(economy::EconomyError::ArithmeticOverflow)?;
+            .ok_or(DreadtideError::ArithmeticOverflow)?;
         anchor_lang::system_program::transfer(
             CpiContext::new(
                 ctx.accounts.system_program.key(),
@@ -222,7 +222,7 @@ pub mod dreadtide {
     pub fn open_stake(ctx: Context<OpenStake>, amount: u64) -> Result<()> {
         require!(
             amount >= economy::MIN_STAKE,
-            economy::EconomyError::StakeBelowMinimum
+            DreadtideError::StakeBelowMinimum
         );
         require!(
             ctx.accounts.game.creator == ctx.accounts.creator.key(),
@@ -250,7 +250,7 @@ pub mod dreadtide {
         );
         require!(
             !ctx.accounts.stake.opponent_deposited,
-            economy::EconomyError::StakeAlreadyDeposited
+            DreadtideError::StakeAlreadyDeposited
         );
         ctx.accounts
             .opponent_profile
@@ -261,15 +261,15 @@ pub mod dreadtide {
 
     pub fn settle_stake(ctx: Context<SettleStake>) -> Result<()> {
         let stake = &mut ctx.accounts.stake;
-        require!(!stake.settled, economy::EconomyError::StakeAlreadySettled);
+        require!(!stake.settled, DreadtideError::StakeAlreadySettled);
         require!(
             stake.creator_deposited && stake.opponent_deposited,
-            economy::EconomyError::StakeNotReady
+            DreadtideError::StakeNotReady
         );
         let pot = stake
             .amount_per_player
             .checked_mul(2)
-            .ok_or(economy::EconomyError::ArithmeticOverflow)?;
+            .ok_or(DreadtideError::ArithmeticOverflow)?;
         let (winner, refunded) = match ctx.accounts.game.phase {
             Phase::VerifiedFinished => {
                 if ctx.accounts.game.audited_winner == 0 {
@@ -289,7 +289,7 @@ pub mod dreadtide {
                     .credit(stake.amount_per_player)?;
                 (Pubkey::default(), true)
             }
-            _ => return err!(economy::EconomyError::MatchNotFinished),
+            _ => return err!(DreadtideError::MatchNotFinished),
         };
         stake.settled = true;
         emit!(economy::StakeSettled {
