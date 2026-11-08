@@ -578,6 +578,53 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "forfeitGame",
+      "discriminator": [
+        177,
+        19,
+        148,
+        121,
+        144,
+        34,
+        8,
+        74
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "joinGame",
       "discriminator": [
         107,
@@ -969,6 +1016,19 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "matchForfeited",
+      "discriminator": [
+        154,
+        253,
+        133,
+        187,
+        123,
+        209,
+        207,
+        139
+      ]
+    },
+    {
       "name": "shotVerified",
       "discriminator": [
         59,
@@ -1095,6 +1155,11 @@ export type Dreadtide = {
       "code": 6019,
       "name": "matchNotFinished",
       "msg": "Match is not ready for stake settlement"
+    },
+    {
+      "code": 6020,
+      "name": "noOpponent",
+      "msg": "A match cannot be forfeited before an opponent joins"
     }
   ],
   "types": [
@@ -1267,6 +1332,26 @@ export type Dreadtide = {
           {
             "name": "auditedWinner",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "matchForfeited",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "forfeiter",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
           }
         ]
       }

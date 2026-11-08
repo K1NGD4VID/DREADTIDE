@@ -72,6 +72,7 @@ function errorMessage(error: unknown, fallback: string): string {
   if (value.includes("InvalidProof")) return "The fleet proof did not match the committed root. Restore the original recovery file.";
   if (value.includes("DeadlineNotPassed")) return "The action window is still open. Timeout resolution becomes available after the countdown expires.";
   if (value.includes("NoEligibleClaimant")) return "Neither player has a committed fleet eligible for this timeout result.";
+  if (value.includes("NoOpponent")) return "You cannot forfeit until another captain has joined the match.";
   if (value.includes("AccountAlreadyInUse") || value.includes("already in use")) return "That match identifier was already used. Press Create Match again for a fresh one.";
   if (value.toLowerCase().includes("insufficient") || value.toLowerCase().includes("0x1")) return "This wallet needs Devnet SOL to pay the transaction fee.";
   if (value.toLowerCase().includes("reject") || value.toLowerCase().includes("cancel")) return "The wallet request was cancelled. No transaction was sent.";
@@ -401,11 +402,11 @@ export function GameConsole() {
     finally { setBusy(false); }
   }
 
-  async function watchGame() {
-    if (!watchAddress) return;
+  async function watchGame(addressValue = watchAddress) {
+    if (!addressValue) return;
     setBusy(true); setMessage("Loading public match state from Solana Devnet...");
     try {
-      const address = new PublicKey(watchAddress);
+      const address = new PublicKey(addressValue);
       await program.account.game.fetch(address);
       setActiveGameAddress(address.toBase58());
       setRole("Spectator");
@@ -414,6 +415,16 @@ export function GameConsole() {
       await loadShotHistory(address.toBase58());
       setMessage("Spectator feed live. Public match state refreshes every five seconds.");
     } catch (error) { setMessage(errorMessage(error, "Could not watch that match.")); }
+    finally { setBusy(false); }
+  }
+
+  async function forfeitGame() {
+    if (!publicKey || !activeGameAddress || !window.confirm("Exit this match and forfeit it? Your opponent will win and receive any D-Coin pot. This cannot be undone.")) return;
+    setBusy(true); setMessage("Submitting your match forfeit to Devnet...");
+    try {
+      await program.methods.forfeitGame().accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      await refresh(); setMessage("Match forfeited. Your opponent is the verified winner.");
+    } catch (error) { setMessage(errorMessage(error, "Could not forfeit this match.")); }
     finally { setBusy(false); }
   }
 
@@ -608,11 +619,11 @@ export function GameConsole() {
         <span className={`live-badge ${connected ? "online" : ""}`}><i /> {connected ? "WALLET READY" : "WALLET OFFLINE"}</span>
       </div>
       {connected ? <section className="economy-panel" aria-labelledby="economy-title"><div className="economy-balance"><p className="eyebrow">D-COIN WALLET</p><h3 id="economy-title">{profileExists ? dBalance : "—"} <span>D</span></h3><small>1 D-COIN = 0.01 DEVNET SOL</small></div>{profileExists ? <><div className="economy-action"><label htmlFor="stake-amount">BATTLE STAKE · MIN 50</label><input id="stake-amount" type="number" min="50" step="10" value={stakeAmount} onChange={(event) => setStakeAmount(Math.max(50, Number(event.target.value) || 50))} /><span>WINNER POT: {stakeAmount * 2} D</span></div><div className="economy-action"><label htmlFor="purchase-amount">BUY D-COINS</label><input id="purchase-amount" type="number" min="1" value={purchaseAmount} onChange={(event) => setPurchaseAmount(Math.max(1, Number(event.target.value) || 1))} /><button type="button" disabled={busy} onClick={buyCoins}>BUY FOR {(purchaseAmount * .01).toFixed(2)} SOL</button></div><button type="button" className="daily-claim" disabled={busy} onClick={claimDaily}>CLAIM DAILY 100 D</button></> : <div className="economy-onboard"><p>Activate once to receive 100 D-Coins now and 100 more each UTC day.</p><button type="button" disabled={busy} onClick={createProfile}>ACTIVATE D-COINS</button></div>}</section> : null}
-      {!connected ? <div className="console-empty"><div><h3>Watch the battle live.</h3><p>Paste any DREADTIDE match address to follow its public on-chain state. No wallet is required.</p></div><div className="spectator-entry"><label htmlFor="watch-address">MATCH ADDRESS</label><input id="watch-address" value={watchAddress} onChange={(event) => setWatchAddress(event.target.value.trim())} placeholder="Paste a Devnet game account" /><button disabled={busy || !watchAddress} onClick={watchGame}>{busy ? "LOADING..." : "WATCH MATCH"}</button></div><p className="connect-note">Connect Phantom or Solflare to command a fleet.</p></div> : (
+      {!connected ? <div className="console-empty"><div><h3>Watch the battle live.</h3><p>Paste any DREADTIDE match address to follow its public on-chain state. No wallet is required.</p></div><div className="spectator-entry"><label htmlFor="watch-address">MATCH ADDRESS</label><input id="watch-address" value={watchAddress} onChange={(event) => setWatchAddress(event.target.value.trim())} placeholder="Paste a Devnet game account" /><button disabled={busy || !watchAddress} onClick={() => void watchGame()}>{busy ? "LOADING..." : "WATCH MATCH"}</button></div><p className="connect-note">Connect Phantom or Solflare to command a fleet.</p></div> : (
         <div className="console-grid">
           <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Challenge another captain or launch a local browser opponent on Devnet.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE PVP MATCH"}</button><button className="secondary-console-action" disabled={busy} onClick={startSoloGame}>PLAY VS BROWSER BOT</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
-          <div className="console-card join-card"><span className="step">02</span><h3>Join or resume</h3><p>Join a new opponent match, or restore a match already owned by this wallet.</p><label htmlFor="join-address">Game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={resumeGame}>RESUME MY MATCH</button></div>
-          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={phase !== "COMMIT" || myCommitted} onClick={() => document.getElementById("fleet-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{myCommitted ? "FLEET COMMITTED" : phase === "COMMIT" ? "DEPLOY FLEET BELOW" : "AWAITING OPPONENT"}</button></div>
+          <div className="console-card join-card"><span className="step">02</span><h3>Join, resume or watch</h3><p>Enter a match as a captain or open its public spectator feed.</p><label htmlFor="join-address">Game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={resumeGame}>RESUME MY MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={() => void watchGame(joinAddress)}>WATCH AS SPECTATOR</button></div>
+          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={phase !== "COMMIT" || myCommitted} onClick={() => document.getElementById("fleet-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{myCommitted ? "FLEET COMMITTED" : phase === "COMMIT" ? "DEPLOY FLEET BELOW" : "AWAITING OPPONENT"}</button>{activeGameAddress && playerIndex >= 0 && players === "Opponent joined" && !["VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <button className="forfeit-button" disabled={busy} onClick={forfeitGame}>EXIT &amp; FORFEIT MATCH</button> : null}</div>
         </div>
       )}
       {connected && activeGameAddress && phase === "COMMIT" ? <FleetDeployment fleet={fleet} onChange={setFleet} onCommit={commitFleet} onExport={exportRecovery} onImport={importRecovery} committed={myCommitted} busy={busy} canCommit={deadline > clockNow} hasRecovery={hasRecovery} /> : null}

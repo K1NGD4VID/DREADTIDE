@@ -19,7 +19,8 @@ export const DreadtideErrorCode = {
   StakeAlreadyDeposited: 6016,
   StakeNotReady: 6017,
   StakeAlreadySettled: 6018,
-  MatchNotFinished: 6019
+  MatchNotFinished: 6019,
+  NoOpponent: 6020
 };
 
 export type DreadtideErrorName = keyof typeof DreadtideErrorCode;

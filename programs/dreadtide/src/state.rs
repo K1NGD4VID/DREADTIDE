@@ -67,6 +67,28 @@ impl Game {
         }
     }
 
+    pub fn forfeit(&mut self, signer: &Pubkey) -> Result<u8> {
+        require!(
+            !matches!(
+                self.phase,
+                Phase::VerifiedFinished | Phase::NoVerifiedWinner | Phase::Cancelled
+            ),
+            DreadtideError::WrongPhase
+        );
+        require!(
+            self.opponent != Pubkey::default(),
+            DreadtideError::NoOpponent
+        );
+        let forfeiter = self.player_index(signer).ok_or(DreadtideError::NotPlayer)?;
+        let winner = 1 - forfeiter;
+        self.phase = Phase::VerifiedFinished;
+        self.audited_winner = winner;
+        self.claimant = winner;
+        self.pending_index = u8::MAX;
+        self.pending_attacker = u8::MAX;
+        Ok(winner)
+    }
+
     pub fn enter_audit(&mut self, claimant: u8, now: i64) -> Result<()> {
         require!(
             claimant < 2 && self.committed[claimant as usize],
@@ -234,6 +256,13 @@ pub struct AuditRejected {
     pub claimant: Pubkey,
 }
 
+#[event]
+pub struct MatchForfeited {
+    pub game: Pubkey,
+    pub forfeiter: Pubkey,
+    pub winner: Pubkey,
+}
+
 #[error_code]
 pub enum DreadtideError {
     #[msg("Wrong game phase")]
@@ -276,4 +305,6 @@ pub enum DreadtideError {
     StakeAlreadySettled,
     #[msg("Match is not ready for stake settlement")]
     MatchNotFinished,
+    #[msg("A match cannot be forfeited before an opponent joins")]
+    NoOpponent,
 }

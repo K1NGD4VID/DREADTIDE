@@ -205,3 +205,13 @@ fn tied_battle_at_five_minutes_has_no_winner() {
     assert_eq!(game.phase, Phase::NoVerifiedWinner);
     assert_eq!(game.audited_winner, u8::MAX);
 }
+
+#[test]
+fn signed_forfeit_awards_the_match_to_the_opponent() {
+    let (mut game, _, _, _) = committed_game();
+    let creator = game.creator;
+    let winner = game.forfeit(&creator).unwrap();
+    assert_eq!(winner, 1);
+    assert_eq!(game.phase, Phase::VerifiedFinished);
+    assert_eq!(game.audited_winner, 1);
+}

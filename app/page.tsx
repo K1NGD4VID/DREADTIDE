@@ -10,7 +10,7 @@ const MATCH = "4pkJGNKMSVBzw6EVqJake9PhaiYQwg2A9tnt9qP45zHVDJvtmJ5ZurH5fsWHtPZfi
 const cells = Array.from({ length: 64 }, (_, index) => index);
 
 export default function Home() {
-  const { connected, publicKey } = useWallet();
+  const { connected, publicKey, disconnect } = useWallet();
 
   return (
     <main>
@@ -18,7 +18,7 @@ export default function Home() {
         <a className="brand" href="#top" aria-label="DREADTIDE home">
           <img src="/wordmark.svg" alt="DREADTIDE" />
         </a>
-        <WalletMultiButton className="wallet-button" />
+        <div className="wallet-controls"><WalletMultiButton className="wallet-button" />{connected ? <button type="button" className="disconnect-button" onClick={() => void disconnect()}>DISCONNECT</button> : null}</div>
       </nav>
 
       <section className="hero" id="top">

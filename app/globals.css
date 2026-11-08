@@ -28,6 +28,9 @@ main { min-height: 100dvh; overflow: hidden; background: radial-gradient(circle 
 .wallet-button:hover,
 .primary-action:hover,
 .wallet-adapter-button:hover { background-color: var(--signal-strong) !important; transform: translateY(-1px); }
+.wallet-controls { justify-self:end; display:flex; align-items:center; gap:8px; }
+.disconnect-button { height:42px; padding:0 14px; border:1px solid var(--line); background:transparent; color:var(--muted); font:800 9px/1 monospace; letter-spacing:.08em; cursor:pointer; }
+.disconnect-button:hover { border-color:#e85d4a; color:#ff806f; }
 
 .hero { min-height: calc(100dvh - 72px); max-width: 1400px; margin: auto; padding: 72px 28px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 6vw; }
 .hero-copy { max-width: 620px; position: relative; z-index: 2; }
@@ -96,6 +99,8 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(58px, 6.5vw, 82px); line-heig
 .status-lines b { color:var(--ink); font-weight:700; text-align:right; }
 .status-lines b.expired { color:#ff7a7a; }
 .commit-button { margin-top:auto !important; }
+.console-card .forfeit-button { margin-top:8px; border-color:#8d3c34; background:transparent; color:#ff806f; }
+.console-card .forfeit-button:hover { border-color:#e85d4a; background:#2b0d0b; }
 .console-message { min-height:20px; margin:24px 0 0; color:var(--signal); font:700 11px/1.4 monospace; }
 .economy-panel { margin-bottom:32px; padding:22px 0; border-block:1px solid var(--line); display:grid; grid-template-columns:1.1fr 1fr 1fr auto; gap:28px; align-items:end; }
 .economy-balance h3 { margin:0; font-size:42px; line-height:1; }

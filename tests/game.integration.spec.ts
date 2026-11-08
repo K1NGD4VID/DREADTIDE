@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { AnchorProvider, BN, Program, Wallet } from "@anchor-lang/core";
-import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { occupancy, proof, salt, tree } from "../app/lib/crypto/merkle";
 import type { Dreadtide } from "../app/idl/dreadtide";
 import idl from "../app/idl/dreadtide.json";
@@ -25,11 +25,21 @@ describe("local validator match", () => {
     const gameIdBytes = Buffer.alloc(8);
     gameIdBytes.writeBigUInt64LE(gameId);
     const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("game"), creator.publicKey.toBuffer(), gameIdBytes], programId);
+    const [creatorProfile] = PublicKey.findProgramAddressSync([Buffer.from("profile"), creator.publicKey.toBuffer()], programId);
+    const [opponentProfile] = PublicKey.findProgramAddressSync([Buffer.from("profile"), opponent.publicKey.toBuffer()], programId);
+    const [stakePda] = PublicKey.findProgramAddressSync([Buffer.from("stake"), gamePda.toBuffer()], programId);
     if (!signerPath) {
       const airdrop = await connection.requestAirdrop(creator.publicKey, 2_000_000_000);
       await connection.confirmTransaction(airdrop, "confirmed");
     }
     console.info(`Game account: ${gamePda.toBase58()}`);
+
+    if (!(await connection.getAccountInfo(creatorProfile, "confirmed"))) {
+      await program.methods.createProfile().accountsStrict({ profile: creatorProfile, player: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
+    }
+    const funding = await provider.sendAndConfirm(new Transaction().add(SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: opponent.publicKey, lamports: Math.round(.01 * LAMPORTS_PER_SOL) })));
+    expect(funding).toBeTruthy();
+    await program.methods.createProfile().accountsStrict({ profile: opponentProfile, player: opponent.publicKey, systemProgram: SystemProgram.programId }).signers([opponent]).rpc();
 
     const ships = [
       { x: 0, y: 0, vertical: false },
@@ -46,11 +56,13 @@ describe("local validator match", () => {
     const opponentRoot = Array.from(opponentTree[6][0]);
 
     await program.methods.createGame(new BN(gameId.toString())).accountsStrict({ game: gamePda, creator: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
+    await program.methods.openStake(new BN(50)).accountsStrict({ game: gamePda, stake: stakePda, creatorProfile, creator: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
     const created = await program.account.game.fetch(gamePda);
     const chainTime = await connection.getBlockTime(await connection.getSlot("confirmed"));
     expect(Number(created.deadline.toString()) - (chainTime ?? Math.floor(Date.now() / 1000))).toBeGreaterThanOrEqual(880);
     expect(Number(created.deadline.toString()) - (chainTime ?? Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(920);
     await program.methods.joinGame().accountsStrict({ game: gamePda, opponent: opponent.publicKey }).signers([opponent]).rpc();
+    await program.methods.acceptStake().accountsStrict({ game: gamePda, stake: stakePda, opponentProfile, opponent: opponent.publicKey }).signers([opponent]).rpc();
     await program.methods.commitBoard(creatorRoot).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
     await program.methods.commitBoard(opponentRoot).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
 
@@ -103,6 +115,13 @@ describe("local validator match", () => {
     const finished = await program.account.game.fetch(gamePda);
     expect(finished.phase).toEqual({ verifiedFinished: {} });
     expect(finished.auditedWinner).toBe(0);
+    await program.methods.settleStake().accountsStrict({ game: gamePda, stake: stakePda, creatorProfile, opponentProfile, caller: creator.publicKey }).rpc();
+    const creatorEconomy = await program.account.playerProfile.fetch(creatorProfile);
+    const opponentEconomy = await program.account.playerProfile.fetch(opponentProfile);
+    const settledStake = await program.account.matchStake.fetch(stakePda);
+    expect(settledStake.settled).toBe(true);
+    expect(Number(creatorEconomy.balance.toString())).toBeGreaterThanOrEqual(150);
+    expect(Number(opponentEconomy.balance.toString())).toBe(50);
     console.info(`Verified match transaction: ${auditSignature}`);
   }, process.env.DREADTIDE_FEE_PAYER_KEYPAIR ? 900_000 : 300_000);
 });

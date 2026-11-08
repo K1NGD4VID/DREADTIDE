@@ -160,6 +160,17 @@ pub mod dreadtide {
         Ok(())
     }
 
+    pub fn forfeit_game(ctx: Context<PlayerAction>) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        let winner = game.forfeit(&ctx.accounts.player.key())?;
+        emit!(state::MatchForfeited {
+            game: game.key(),
+            forfeiter: ctx.accounts.player.key(),
+            winner: game.player(winner),
+        });
+        Ok(())
+    }
+
     pub fn create_profile(ctx: Context<CreateProfile>) -> Result<()> {
         let profile = &mut ctx.accounts.profile;
         profile.owner = ctx.accounts.player.key();
