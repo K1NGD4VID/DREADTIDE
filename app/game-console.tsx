@@ -100,7 +100,12 @@ export function GameConsole() {
   const [playerIndex, setPlayerIndex] = useState(-1);
   const [battleState, setBattleState] = useState<BattleState>({ creator: "", opponent: "", turn: 0, pendingIndex: 255, pendingAttacker: 255, shots: [0n, 0n], hits: [0, 0], claimant: 255, auditedWinner: 255 });
   const [history, setHistory] = useState<ShotOutcome[]>([]);
+  const [dBalance, setDBalance] = useState(0);
+  const [profileExists, setProfileExists] = useState(false);
+  const [stakeAmount, setStakeAmount] = useState(50);
+  const [purchaseAmount, setPurchaseAmount] = useState(50);
   const botBusy = useRef(false);
+  const settlementBusy = useRef(false);
 
   const wallet = useMemo<any>(() => {
     if (!publicKey || !signTransaction || !signAllTransactions) return null;
@@ -109,6 +114,15 @@ export function GameConsole() {
 
   const readonlyWallet = useMemo<any>(() => ({ publicKey: EMPTY_KEY, signTransaction: async () => { throw new Error("Connect a wallet to sign transactions."); }, signAllTransactions: async () => { throw new Error("Connect a wallet to sign transactions."); } }), []);
   const program = useMemo(() => new Program<Dreadtide>(idl as Dreadtide, new AnchorProvider(connection, wallet ?? readonlyWallet, { commitment: "confirmed" })), [connection, readonlyWallet, wallet]);
+  const profileAddress = useMemo(() => publicKey ? PublicKey.findProgramAddressSync([Buffer.from("profile"), publicKey.toBuffer()], PROGRAM_ID)[0] : null, [publicKey]);
+
+  const refreshEconomy = useCallback(async () => {
+    if (!profileAddress) { setProfileExists(false); setDBalance(0); return; }
+    try {
+      const profile = await program.account.playerProfile.fetch(profileAddress) as any;
+      setProfileExists(true); setDBalance(Number(profile.balance.toString()));
+    } catch { setProfileExists(false); setDBalance(0); }
+  }, [profileAddress, program]);
 
   const refresh = useCallback(async (address = activeGameAddress) => {
     if (!address) return;
@@ -144,6 +158,7 @@ export function GameConsole() {
     setPlayerIndex(-1);
     setHistory([]);
   }, [walletAddress]);
+  useEffect(() => { void refreshEconomy(); }, [refreshEconomy]);
 
   const loadShotHistory = useCallback(async (address = activeGameAddress) => {
     if (!address) return;
@@ -245,6 +260,25 @@ export function GameConsole() {
     return () => window.clearTimeout(timer);
   }, [activeGameAddress, battleState.pendingIndex, battleState.shots, battleState.turn, connection, loadShotHistory, phase, refresh]);
   useEffect(() => {
+    if (!publicKey || !activeGameAddress || settlementBusy.current || !["VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase)) return;
+    const settle = async () => {
+      const game = new PublicKey(activeGameAddress);
+      const [stake] = PublicKey.findProgramAddressSync([Buffer.from("stake"), game.toBuffer()], PROGRAM_ID);
+      if (!(await connection.getAccountInfo(stake, "confirmed"))) return;
+      settlementBusy.current = true;
+      try {
+        const state = await program.account.game.fetch(game) as any;
+        const [creatorProfile] = PublicKey.findProgramAddressSync([Buffer.from("profile"), state.creator.toBuffer()], PROGRAM_ID);
+        const [opponentProfile] = PublicKey.findProgramAddressSync([Buffer.from("profile"), state.opponent.toBuffer()], PROGRAM_ID);
+        await program.methods.settleStake().accountsStrict({ game, stake, creatorProfile, opponentProfile, caller: publicKey }).rpc();
+        await refreshEconomy(); setMessage("D-Coin stake settled on-chain. Winner received the full pot; ties are refunded.");
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("StakeAlreadySettled")) setMessage(errorMessage(error, "Match finished, but stake settlement needs another attempt."));
+      } finally { settlementBusy.current = false; }
+    };
+    void settle();
+  }, [activeGameAddress, connection, phase, program, publicKey, refreshEconomy]);
+  useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(timer);
   }, []);
@@ -253,6 +287,8 @@ export function GameConsole() {
     if (!program || !publicKey) return;
     setBusy(true); setMessage("Preparing a unique Devnet match...");
     try {
+      if (!profileExists || !profileAddress) throw new Error("Activate your D-Coin profile before creating a match.");
+      if (stakeAmount < 50 || dBalance < stakeAmount) throw new Error("Choose a stake of at least 50 D-Coins within your balance.");
       let id = 0n;
       let pda: PublicKey | null = null;
       for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -268,6 +304,11 @@ export function GameConsole() {
       setGameId(id.toString());
       setMessage("Awaiting wallet approval...");
       await program.methods.createGame(new BN(id.toString())).accountsStrict({ game: pda, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
+      if (profileExists && stakeAmount >= 50) {
+        const [stake] = PublicKey.findProgramAddressSync([Buffer.from("stake"), pda.toBuffer()], PROGRAM_ID);
+        await program.methods.openStake(new BN(stakeAmount)).accountsStrict({ game: pda, stake, creatorProfile: profileAddress!, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
+        await refreshEconomy();
+      }
       setActiveGameAddress(pda.toBase58());
       localStorage.setItem(`dreadtide-match:${publicKey.toBase58()}`, pda.toBase58());
       setJoinAddress("");
@@ -327,8 +368,15 @@ export function GameConsole() {
         setMessage("This match invitation expired. Ask the creator to make a fresh match.");
         return;
       }
+      const [stake] = PublicKey.findProgramAddressSync([Buffer.from("stake"), address.toBuffer()], PROGRAM_ID);
+      const stakeAccount = await connection.getAccountInfo(stake, "confirmed");
+      if (stakeAccount && (!profileExists || !profileAddress)) throw new Error("Create your D-Coin profile before joining this staked match.");
       setMessage("Awaiting wallet approval...");
       await program.methods.joinGame().accountsStrict({ game: address, opponent: publicKey }).rpc();
+      if (stakeAccount) {
+        await program.methods.acceptStake().accountsStrict({ game: address, stake, opponentProfile: profileAddress!, opponent: publicKey }).rpc();
+        await refreshEconomy();
+      }
       setActiveGameAddress(address.toBase58());
       localStorage.setItem(`dreadtide-match:${publicKey.toBase58()}`, address.toBase58());
       setRole("Opponent");
@@ -366,6 +414,37 @@ export function GameConsole() {
       await loadShotHistory(address.toBase58());
       setMessage("Spectator feed live. Public match state refreshes every five seconds.");
     } catch (error) { setMessage(errorMessage(error, "Could not watch that match.")); }
+    finally { setBusy(false); }
+  }
+
+  async function createProfile() {
+    if (!publicKey || !profileAddress) return;
+    setBusy(true); setMessage("Creating your D-Coin profile with today's 100 D-Coin grant...");
+    try {
+      await program.methods.createProfile().accountsStrict({ profile: profileAddress, player: publicKey, systemProgram: SystemProgram.programId }).rpc();
+      await refreshEconomy(); setMessage("D-Coin profile active. 100 daily D-Coins credited.");
+    } catch (error) { setMessage(errorMessage(error, "Could not create the D-Coin profile.")); }
+    finally { setBusy(false); }
+  }
+
+  async function claimDaily() {
+    if (!publicKey || !profileAddress) return;
+    setBusy(true); setMessage("Claiming today's 100 D-Coins...");
+    try {
+      await program.methods.claimDaily().accountsStrict({ profile: profileAddress, player: publicKey }).rpc();
+      await refreshEconomy(); setMessage("Daily grant claimed: +100 D-Coins.");
+    } catch (error) { setMessage(errorMessage(error, "Today's D-Coins may already be claimed.")); }
+    finally { setBusy(false); }
+  }
+
+  async function buyCoins() {
+    if (!publicKey || !profileAddress || purchaseAmount < 1) return;
+    setBusy(true); setMessage(`Approve ${(purchaseAmount * .01).toFixed(2)} Devnet SOL for ${purchaseAmount} D-Coins.`);
+    try {
+      const [treasury] = PublicKey.findProgramAddressSync([Buffer.from("treasury")], PROGRAM_ID);
+      await program.methods.buyCoins(new BN(purchaseAmount)).accountsStrict({ profile: profileAddress, player: publicKey, treasury, systemProgram: SystemProgram.programId }).rpc();
+      await refreshEconomy(); setMessage(`${purchaseAmount} D-Coins purchased at 0.01 Devnet SOL each.`);
+    } catch (error) { setMessage(errorMessage(error, "D-Coin purchase failed.")); }
     finally { setBusy(false); }
   }
 
@@ -528,6 +607,7 @@ export function GameConsole() {
         <div><p className="eyebrow">MATCH OPERATIONS</p><h2 id="game-console-title">Enter the war room.</h2></div>
         <span className={`live-badge ${connected ? "online" : ""}`}><i /> {connected ? "WALLET READY" : "WALLET OFFLINE"}</span>
       </div>
+      {connected ? <section className="economy-panel" aria-labelledby="economy-title"><div className="economy-balance"><p className="eyebrow">D-COIN WALLET</p><h3 id="economy-title">{profileExists ? dBalance : "—"} <span>D</span></h3><small>1 D-COIN = 0.01 DEVNET SOL</small></div>{profileExists ? <><div className="economy-action"><label htmlFor="stake-amount">BATTLE STAKE · MIN 50</label><input id="stake-amount" type="number" min="50" step="10" value={stakeAmount} onChange={(event) => setStakeAmount(Math.max(50, Number(event.target.value) || 50))} /><span>WINNER POT: {stakeAmount * 2} D</span></div><div className="economy-action"><label htmlFor="purchase-amount">BUY D-COINS</label><input id="purchase-amount" type="number" min="1" value={purchaseAmount} onChange={(event) => setPurchaseAmount(Math.max(1, Number(event.target.value) || 1))} /><button type="button" disabled={busy} onClick={buyCoins}>BUY FOR {(purchaseAmount * .01).toFixed(2)} SOL</button></div><button type="button" className="daily-claim" disabled={busy} onClick={claimDaily}>CLAIM DAILY 100 D</button></> : <div className="economy-onboard"><p>Activate once to receive 100 D-Coins now and 100 more each UTC day.</p><button type="button" disabled={busy} onClick={createProfile}>ACTIVATE D-COINS</button></div>}</section> : null}
       {!connected ? <div className="console-empty"><div><h3>Watch the battle live.</h3><p>Paste any DREADTIDE match address to follow its public on-chain state. No wallet is required.</p></div><div className="spectator-entry"><label htmlFor="watch-address">MATCH ADDRESS</label><input id="watch-address" value={watchAddress} onChange={(event) => setWatchAddress(event.target.value.trim())} placeholder="Paste a Devnet game account" /><button disabled={busy || !watchAddress} onClick={watchGame}>{busy ? "LOADING..." : "WATCH MATCH"}</button></div><p className="connect-note">Connect Phantom or Solflare to command a fleet.</p></div> : (
         <div className="console-grid">
           <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Challenge another captain or launch a local browser opponent on Devnet.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE PVP MATCH"}</button><button className="secondary-console-action" disabled={busy} onClick={startSoloGame}>PLAY VS BROWSER BOT</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>

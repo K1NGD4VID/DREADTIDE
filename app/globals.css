@@ -97,6 +97,18 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(58px, 6.5vw, 82px); line-heig
 .status-lines b.expired { color:#ff7a7a; }
 .commit-button { margin-top:auto !important; }
 .console-message { min-height:20px; margin:24px 0 0; color:var(--signal); font:700 11px/1.4 monospace; }
+.economy-panel { margin-bottom:32px; padding:22px 0; border-block:1px solid var(--line); display:grid; grid-template-columns:1.1fr 1fr 1fr auto; gap:28px; align-items:end; }
+.economy-balance h3 { margin:0; font-size:42px; line-height:1; }
+.economy-balance h3 span { color:var(--signal); font-size:18px; }
+.economy-balance small,.economy-action span { display:block; margin-top:9px; color:var(--muted); font:700 9px/1.3 monospace; letter-spacing:.08em; }
+.economy-action { display:grid; gap:8px; }
+.economy-action label { color:var(--muted); font:700 9px/1 monospace; letter-spacing:.1em; }
+.economy-action input { width:100%; min-height:40px; border:1px solid var(--line); background:#020817; color:var(--ink); padding:0 11px; font:700 12px monospace; }
+.economy-action button,.daily-claim,.economy-onboard button { min-height:40px; border:1px solid var(--signal); background:transparent; color:var(--signal); font:800 9px/1 monospace; letter-spacing:.08em; cursor:pointer; }
+.daily-claim { padding:0 18px; }
+.economy-onboard { grid-column:2/-1; display:flex; align-items:center; justify-content:flex-end; gap:20px; }
+.economy-onboard p { max-width:460px; margin:0; color:var(--muted); line-height:1.5; }
+.economy-onboard button { padding:0 20px; }
 
 .fleet-deployment { margin-top:44px; padding-top:38px; border-top:1px solid var(--line); }
 .fleet-heading { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:28px; }
@@ -208,6 +220,8 @@ footer a { color: var(--signal); text-decoration: none; }
   .spectator-entry { grid-template-columns:1fr; }
   .spectator-entry label { grid-column:auto; }
   .console-grid { grid-template-columns:1fr; }
+  .economy-panel { grid-template-columns:1fr; align-items:stretch; }
+  .economy-onboard { grid-column:auto; align-items:stretch; flex-direction:column; }
   .console-card,.console-card:last-child { min-height:0; margin:0; padding:28px 0; border-right:0; border-bottom:1px solid var(--line); }
   .console-card:last-child { border-bottom:0; }
   .console-card h3 { margin-top:32px; }
