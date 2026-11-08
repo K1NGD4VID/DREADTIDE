@@ -307,4 +307,10 @@ pub enum DreadtideError {
     MatchNotFinished,
     #[msg("A match cannot be forfeited before an opponent joins")]
     NoOpponent,
+    #[msg("Session expiry must be within the next hour")]
+    InvalidSessionExpiry,
+    #[msg("Session delegate does not match")]
+    InvalidSessionDelegate,
+    #[msg("Session authorization has expired")]
+    SessionExpired,
 }

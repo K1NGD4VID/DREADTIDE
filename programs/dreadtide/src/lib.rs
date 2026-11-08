@@ -3,6 +3,7 @@ use anchor_lang::prelude::*;
 pub mod crypto;
 pub mod economy;
 pub mod fleet;
+pub mod session;
 pub mod state;
 
 use state::{DreadtideError, Game, Phase, ACTION_SECONDS, BATTLE_SECONDS};
@@ -167,6 +168,71 @@ pub mod dreadtide {
             game: game.key(),
             forfeiter: ctx.accounts.player.key(),
             winner: game.player(winner),
+        });
+        Ok(())
+    }
+
+    pub fn authorize_session(
+        ctx: Context<AuthorizeSession>,
+        delegate: Pubkey,
+        expires_at: i64,
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            ctx.accounts
+                .game
+                .player_index(&ctx.accounts.player.key())
+                .is_some(),
+            DreadtideError::NotPlayer
+        );
+        require!(
+            expires_at > now && expires_at <= now + 3_600,
+            DreadtideError::InvalidSessionExpiry
+        );
+        let session = &mut ctx.accounts.session;
+        session.game = ctx.accounts.game.key();
+        session.player = ctx.accounts.player.key();
+        session.delegate = delegate;
+        session.expires_at = expires_at;
+        session.bump = ctx.bumps.session;
+        Ok(())
+    }
+
+    pub fn revoke_session(_ctx: Context<RevokeSession>) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn fire_session(ctx: Context<SessionAction>, index: u8) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        ctx.accounts.validate(now)?;
+        ctx.accounts
+            .game
+            .fire(&ctx.accounts.session.player, index, now)
+    }
+
+    pub fn respond_session(
+        ctx: Context<SessionAction>,
+        is_ship: bool,
+        cell_salt: [u8; 32],
+        siblings: [[u8; 32]; 6],
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        ctx.accounts.validate(now)?;
+        let game = &mut ctx.accounts.game;
+        let shot = game.respond(
+            &ctx.accounts.session.player,
+            is_ship,
+            &cell_salt,
+            &siblings,
+            now,
+        )?;
+        emit!(state::ShotVerified {
+            game: game.key(),
+            attacker: game.player(shot.attacker),
+            defender: game.player(shot.defender),
+            index: shot.index,
+            is_ship: shot.is_ship,
+            root: game.roots[shot.defender as usize]
         });
         Ok(())
     }
@@ -404,4 +470,46 @@ pub struct SettleStake<'info> {
     #[account(mut, seeds = [b"profile", game.opponent.as_ref()], bump = opponent_profile.bump, constraint = opponent_profile.owner == game.opponent)]
     pub opponent_profile: Account<'info, economy::PlayerProfile>,
     pub caller: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct AuthorizeSession<'info> {
+    pub game: Account<'info, Game>,
+    #[account(init_if_needed, payer = player, space = 8 + session::MatchSession::SPACE, seeds = [b"session", game.key().as_ref(), player.key().as_ref()], bump)]
+    pub session: Account<'info, session::MatchSession>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct RevokeSession<'info> {
+    pub game: Account<'info, Game>,
+    #[account(mut, close = player, seeds = [b"session", game.key().as_ref(), player.key().as_ref()], bump = session.bump, constraint = session.player == player.key(), constraint = session.game == game.key())]
+    pub session: Account<'info, session::MatchSession>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SessionAction<'info> {
+    #[account(mut)]
+    pub game: Account<'info, Game>,
+    #[account(seeds = [b"session", game.key().as_ref(), session.player.as_ref()], bump = session.bump, constraint = session.game == game.key())]
+    pub session: Account<'info, session::MatchSession>,
+    pub delegate: Signer<'info>,
+}
+
+impl<'info> SessionAction<'info> {
+    fn validate(&self, now: i64) -> Result<()> {
+        require!(
+            self.session.delegate == self.delegate.key(),
+            DreadtideError::InvalidSessionDelegate
+        );
+        require!(
+            now <= self.session.expires_at,
+            DreadtideError::SessionExpired
+        );
+        Ok(())
+    }
 }

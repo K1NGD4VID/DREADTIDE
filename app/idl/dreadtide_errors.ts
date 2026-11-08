@@ -20,7 +20,10 @@ export const DreadtideErrorCode = {
   StakeNotReady: 6017,
   StakeAlreadySettled: 6018,
   MatchNotFinished: 6019,
-  NoOpponent: 6020
+  NoOpponent: 6020,
+  InvalidSessionExpiry: 6021,
+  InvalidSessionDelegate: 6022,
+  SessionExpired: 6023
 };
 
 export type DreadtideErrorName = keyof typeof DreadtideErrorCode;

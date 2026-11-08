@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnchorProvider, BN, EventParser, Program } from "@anchor-lang/core";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import idl from "./idl/dreadtide.json";
 import type { Dreadtide } from "./idl/dreadtide";
 import { occupancy, proof, salt, tree } from "./lib/crypto/merkle";
@@ -12,6 +12,7 @@ import { emptyFleet, validateFleet, type FleetPlacement } from "./lib/game/fleet
 import { botProgram, botStorageKey, chooseBotTarget, createBotRecord, restoreBot, type BotRecord } from "./lib/game/browser-bot";
 import { BattleArena, type BattleState } from "./battle-arena";
 import type { ShotOutcome } from "./lib/game/battle";
+import { createSessionRecord, readSession, restoreSession, sessionStorageKey, type MatchSessionRecord } from "./lib/game/match-session";
 
 const PROGRAM_ID = new PublicKey(idl.address);
 const EMPTY_KEY = new PublicKey(new Uint8Array(32));
@@ -73,6 +74,9 @@ function errorMessage(error: unknown, fallback: string): string {
   if (value.includes("DeadlineNotPassed")) return "The action window is still open. Timeout resolution becomes available after the countdown expires.";
   if (value.includes("NoEligibleClaimant")) return "Neither player has a committed fleet eligible for this timeout result.";
   if (value.includes("NoOpponent")) return "You cannot forfeit until another captain has joined the match.";
+  if (value.includes("InvalidSessionExpiry")) return "The seamless-play session must expire within one hour.";
+  if (value.includes("InvalidSessionDelegate")) return "This browser no longer holds the authorized match key. Re-enable seamless play.";
+  if (value.includes("SessionExpired")) return "Your seamless-play session expired. Enable it again to remove Fire and Prove prompts.";
   if (value.includes("AccountAlreadyInUse") || value.includes("already in use")) return "That match identifier was already used. Press Create Match again for a fresh one.";
   if (value.toLowerCase().includes("insufficient") || value.toLowerCase().includes("0x1")) return "This wallet needs Devnet SOL to pay the transaction fee.";
   if (value.toLowerCase().includes("reject") || value.toLowerCase().includes("cancel")) return "The wallet request was cancelled. No transaction was sent.";
@@ -105,6 +109,7 @@ export function GameConsole() {
   const [profileExists, setProfileExists] = useState(false);
   const [stakeAmount, setStakeAmount] = useState(50);
   const [purchaseAmount, setPurchaseAmount] = useState(50);
+  const [matchSession, setMatchSession] = useState<MatchSessionRecord | null>(null);
   const botBusy = useRef(false);
   const settlementBusy = useRef(false);
 
@@ -116,6 +121,7 @@ export function GameConsole() {
   const readonlyWallet = useMemo<any>(() => ({ publicKey: EMPTY_KEY, signTransaction: async () => { throw new Error("Connect a wallet to sign transactions."); }, signAllTransactions: async () => { throw new Error("Connect a wallet to sign transactions."); } }), []);
   const program = useMemo(() => new Program<Dreadtide>(idl as Dreadtide, new AnchorProvider(connection, wallet ?? readonlyWallet, { commitment: "confirmed" })), [connection, readonlyWallet, wallet]);
   const profileAddress = useMemo(() => publicKey ? PublicKey.findProgramAddressSync([Buffer.from("profile"), publicKey.toBuffer()], PROGRAM_ID)[0] : null, [publicKey]);
+  const sessionAddress = useMemo(() => publicKey && activeGameAddress ? PublicKey.findProgramAddressSync([Buffer.from("session"), new PublicKey(activeGameAddress).toBuffer(), publicKey.toBuffer()], PROGRAM_ID)[0] : null, [activeGameAddress, publicKey]);
 
   const refreshEconomy = useCallback(async () => {
     if (!profileAddress) { setProfileExists(false); setDBalance(0); return; }
@@ -160,6 +166,15 @@ export function GameConsole() {
     setHistory([]);
   }, [walletAddress]);
   useEffect(() => { void refreshEconomy(); }, [refreshEconomy]);
+  useEffect(() => {
+    if (!publicKey || !activeGameAddress) { setMatchSession(null); return; }
+    setMatchSession(readSession(activeGameAddress, publicKey.toBase58()));
+  }, [activeGameAddress, publicKey]);
+  useEffect(() => {
+    if (!matchSession || matchSession.expiresAt > clockNow) return;
+    localStorage.removeItem(sessionStorageKey(matchSession.matchAddress, matchSession.playerAddress));
+    setMatchSession(null);
+  }, [clockNow, matchSession]);
 
   const loadShotHistory = useCallback(async (address = activeGameAddress) => {
     if (!address) return;
@@ -534,16 +549,81 @@ export function GameConsole() {
     return record;
   }
 
+  async function submitSignedTransaction(transaction: Transaction, signer: Keypair): Promise<string> {
+    const latest = await connection.getLatestBlockhash("confirmed");
+    transaction.feePayer = signer.publicKey;
+    transaction.recentBlockhash = latest.blockhash;
+    transaction.partialSign(signer);
+    const simulation = await connection.simulateTransaction(transaction);
+    if (simulation.value.err) throw new Error(`Session transaction simulation failed: ${JSON.stringify(simulation.value.err)}`);
+    const signature = await connection.sendRawTransaction(transaction.serialize());
+    await connection.confirmTransaction({ signature, ...latest }, "confirmed");
+    return signature;
+  }
+
+  function requireMatchSession(): { record: MatchSessionRecord; delegate: Keypair; session: PublicKey } | null {
+    if (!publicKey || !activeGameAddress || !sessionAddress) return null;
+    const record = readSession(activeGameAddress, publicKey.toBase58());
+    if (!record) return null;
+    return { record, delegate: restoreSession(record), session: sessionAddress };
+  }
+
+  async function enableSeamlessPlay() {
+    if (!publicKey || !signTransaction || !activeGameAddress || !sessionAddress) return;
+    setBusy(true);
+    setMessage("Approve once: authorize a match-only Fire/Prove key and fund it with exactly 0.01 Devnet SOL for fees.");
+    try {
+      const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+      const record = createSessionRecord(activeGameAddress, publicKey.toBase58(), expiresAt);
+      const delegate = restoreSession(record);
+      const authorize = await program.methods.authorizeSession(delegate.publicKey, new BN(expiresAt)).accountsStrict({ game: new PublicKey(activeGameAddress), session: sessionAddress, player: publicKey, systemProgram: SystemProgram.programId }).instruction();
+      const transaction = new Transaction().add(
+        SystemProgram.transfer({ fromPubkey: publicKey, toPubkey: delegate.publicKey, lamports: Math.round(.01 * LAMPORTS_PER_SOL) }),
+        authorize,
+      );
+      const latest = await connection.getLatestBlockhash("confirmed");
+      transaction.feePayer = publicKey;
+      transaction.recentBlockhash = latest.blockhash;
+      const signed = await signTransaction(transaction);
+      const simulation = await connection.simulateTransaction(signed);
+      if (simulation.value.err) throw new Error(`Authorization simulation failed: ${JSON.stringify(simulation.value.err)}`);
+      const signature = await connection.sendRawTransaction(signed.serialize());
+      await connection.confirmTransaction({ signature, ...latest }, "confirmed");
+      localStorage.setItem(sessionStorageKey(activeGameAddress, publicKey.toBase58()), JSON.stringify(record));
+      setMatchSession(record);
+      setMessage("Seamless play enabled. Fire and Prove are match-scoped and no longer open wallet approval prompts.");
+    } catch (error) { setMessage(errorMessage(error, "Could not enable seamless play.")); }
+    finally { setBusy(false); }
+  }
+
+  async function revokeSeamlessPlay() {
+    if (!publicKey || !activeGameAddress || !sessionAddress) return;
+    setBusy(true); setMessage("Revoke the match session in your wallet. Remaining delegate funds stay on the local key until expiry.");
+    try {
+      await program.methods.revokeSession().accountsStrict({ game: new PublicKey(activeGameAddress), session: sessionAddress, player: publicKey }).rpc();
+      localStorage.removeItem(sessionStorageKey(activeGameAddress, publicKey.toBase58()));
+      setMatchSession(null);
+      setMessage("Seamless play revoked for this match.");
+    } catch (error) { setMessage(errorMessage(error, "Could not revoke seamless play.")); }
+    finally { setBusy(false); }
+  }
+
   async function fireAt(index: number) {
     if (!program || !publicKey || !activeGameAddress) return;
-    setBusy(true); setMessage(`Devnet fire transaction: target ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1}. Confirm in your wallet.`);
+    const session = requireMatchSession();
+    setBusy(true); setMessage(session ? `Firing at ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1} with your match session...` : `Devnet fire transaction: target ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1}. Confirm in your wallet.`);
     try {
       const state = await program.account.game.fetch(new PublicKey(activeGameAddress)) as any;
       const currentIndex = publicKey.equals(state.creator) ? 0 : publicKey.equals(state.opponent) ? 1 : -1;
       if (phaseName(state.phase) !== "fire" || currentIndex < 0 || state.turn !== currentIndex) throw new Error("WrongPlayer");
       const defender = 1 - currentIndex;
       if ((BigInt(state.shots[defender].toString()) & (1n << BigInt(index))) !== 0n) throw new Error("DuplicateShot");
-      await program.methods.fire(index).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      if (session) {
+        const transaction = await program.methods.fireSession(index).accountsStrict({ game: new PublicKey(activeGameAddress), session: session.session, delegate: session.delegate.publicKey }).transaction();
+        await submitSignedTransaction(transaction, session.delegate);
+      } else {
+        await program.methods.fire(index).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      }
       await refresh();
       setMessage("Attack confirmed. Waiting for the defender's cryptographic response.");
     } catch (error) { setMessage(errorMessage(error, "Fire transaction failed.")); }
@@ -566,8 +646,14 @@ export function GameConsole() {
       const levels = await tree(BigInt(record.gameId), publicKey.toBytes(), seed, board);
       const cellSalt = await salt(seed, index);
       const siblings = proof(levels, index).map((item) => Array.from(item));
-      setMessage(`Devnet response transaction: prove ${board[index] ? "hit" : "miss"} at ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1}. Confirm in your wallet.`);
-      await program.methods.respond(board[index], Array.from(cellSalt), siblings).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      const session = requireMatchSession();
+      setMessage(session ? `Proving ${board[index] ? "hit" : "miss"} with your match session...` : `Devnet response transaction: prove ${board[index] ? "hit" : "miss"} at ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1}. Confirm in your wallet.`);
+      if (session) {
+        const transaction = await program.methods.respondSession(board[index], Array.from(cellSalt), siblings).accountsStrict({ game: new PublicKey(activeGameAddress), session: session.session, delegate: session.delegate.publicKey }).transaction();
+        await submitSignedTransaction(transaction, session.delegate);
+      } else {
+        await program.methods.respond(board[index], Array.from(cellSalt), siblings).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      }
       await refresh();
       await loadShotHistory();
       setMessage(`Verified ${board[index] ? "hit" : "miss"}. The next turn is now live.`);
@@ -627,6 +713,7 @@ export function GameConsole() {
         </div>
       )}
       {connected && activeGameAddress && phase === "COMMIT" ? <FleetDeployment fleet={fleet} onChange={setFleet} onCommit={commitFleet} onExport={exportRecovery} onImport={importRecovery} committed={myCommitted} busy={busy} canCommit={deadline > clockNow} hasRecovery={hasRecovery} /> : null}
+      {connected && activeGameAddress && playerIndex >= 0 && ["FIRE", "RESPOND"].includes(phase) ? <section className="session-control" aria-label="Seamless play authorization"><div><p className="eyebrow">MATCH SESSION</p><h3>{matchSession ? "SEAMLESS PLAY ACTIVE" : "REMOVE FIRE / PROVE POPUPS"}</h3><p>{matchSession ? `Restricted to this match · expires in ${formatRemaining(matchSession.expiresAt - clockNow)}` : "One wallet approval authorizes a local match-only key for Fire and Prove and transfers exactly 0.01 Devnet SOL to pay its network fees."}</p></div>{matchSession ? <button type="button" className="secondary-console-action" disabled={busy} onClick={revokeSeamlessPlay}>REVOKE SESSION</button> : <button type="button" disabled={busy} onClick={enableSeamlessPlay}>ENABLE · 0.01 DEVNET SOL</button>}</section> : null}
       {activeGameAddress && ["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <BattleArena phase={phase} playerIndex={playerIndex} state={battleState} fleet={fleet} history={history} deadlineExpired={deadline > 0 && deadline <= clockNow} busy={busy} hasRecovery={hasRecovery} onFire={fireAt} onRespond={respondToShot} onClaimTimeout={claimTimeout} onAudit={auditFleet} onPlayAgain={playAgain} /> : null}
       <p className="console-message" role="status">{message}</p>
     </section>

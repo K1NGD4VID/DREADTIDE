@@ -66,14 +66,28 @@ describe("local validator match", () => {
     await program.methods.commitBoard(creatorRoot).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
     await program.methods.commitBoard(opponentRoot).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
 
-    await program.methods.fire(18).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
+    const creatorDelegate = Keypair.generate();
+    const opponentDelegate = Keypair.generate();
+    const [creatorSession] = PublicKey.findProgramAddressSync([Buffer.from("session"), gamePda.toBuffer(), creator.publicKey.toBuffer()], programId);
+    const [opponentSession] = PublicKey.findProgramAddressSync([Buffer.from("session"), gamePda.toBuffer(), opponent.publicKey.toBuffer()], programId);
+    await provider.sendAndConfirm(new Transaction().add(
+      SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: creatorDelegate.publicKey, lamports: Math.round(.005 * LAMPORTS_PER_SOL) }),
+      SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: opponentDelegate.publicKey, lamports: Math.round(.005 * LAMPORTS_PER_SOL) }),
+    ));
+    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    await program.methods.authorizeSession(creatorDelegate.publicKey, new BN(expiresAt)).accountsStrict({ game: gamePda, session: creatorSession, player: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
+    await program.methods.authorizeSession(opponentDelegate.publicKey, new BN(expiresAt)).accountsStrict({ game: gamePda, session: opponentSession, player: opponent.publicKey, systemProgram: SystemProgram.programId }).signers([opponent]).rpc();
+
+    await program.methods.fireSession(18).accountsStrict({ game: gamePda, session: creatorSession, delegate: creatorDelegate.publicKey }).signers([creatorDelegate]).rpc();
     await expect(program.methods.fire(19).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc()).rejects.toThrow();
     const cellSalt = Array.from(await salt(opponentSeed, 18));
     const siblings = proof(opponentTree, 18).map((item) => Array.from(item));
     const wrongSalt = [...cellSalt];
     wrongSalt[0] ^= 1;
     await expect(program.methods.respond(true, wrongSalt, siblings).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc()).rejects.toThrow();
-    await program.methods.respond(true, cellSalt, siblings).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
+    await program.methods.respondSession(true, cellSalt, siblings).accountsStrict({ game: gamePda, session: opponentSession, delegate: opponentDelegate.publicKey }).signers([opponentDelegate]).rpc();
+    await program.methods.revokeSession().accountsStrict({ game: gamePda, session: creatorSession, player: creator.publicKey }).rpc();
+    expect(await connection.getAccountInfo(creatorSession, "confirmed")).toBeNull();
 
     const state = await program.account.game.fetch(gamePda);
     expect(state.hits[1]).toBe(1);

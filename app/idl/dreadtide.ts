@@ -152,6 +152,71 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "authorizeSession",
+      "discriminator": [
+        187,
+        218,
+        251,
+        161,
+        99,
+        40,
+        34,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "game"
+        },
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "delegate",
+          "type": "pubkey"
+        },
+        {
+          "name": "expiresAt",
+          "type": "i64"
+        }
+      ]
+    },
+    {
       "name": "buyCoins",
       "discriminator": [
         210,
@@ -578,6 +643,63 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "fireSession",
+      "discriminator": [
+        160,
+        247,
+        83,
+        195,
+        166,
+        250,
+        93,
+        126
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true
+        },
+        {
+          "name": "session",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "matchSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "forfeitGame",
       "discriminator": [
         177,
@@ -826,6 +948,138 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "respondSession",
+      "discriminator": [
+        106,
+        201,
+        22,
+        84,
+        149,
+        147,
+        182,
+        128
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true
+        },
+        {
+          "name": "session",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "matchSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "isShip",
+          "type": "bool"
+        },
+        {
+          "name": "cellSalt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "siblings",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              6
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "revokeSession",
+      "discriminator": [
+        86,
+        92,
+        198,
+        120,
+        144,
+        2,
+        7,
+        194
+      ],
+      "accounts": [
+        {
+          "name": "game"
+        },
+        {
+          "name": "session",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "writable": true,
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "settleStake",
       "discriminator": [
         89,
@@ -933,6 +1187,19 @@ export type Dreadtide = {
         100,
         121,
         18
+      ]
+    },
+    {
+      "name": "matchSession",
+      "discriminator": [
+        104,
+        107,
+        14,
+        182,
+        119,
+        114,
+        111,
+        178
       ]
     },
     {
@@ -1160,6 +1427,21 @@ export type Dreadtide = {
       "code": 6020,
       "name": "noOpponent",
       "msg": "A match cannot be forfeited before an opponent joins"
+    },
+    {
+      "code": 6021,
+      "name": "invalidSessionExpiry",
+      "msg": "Session expiry must be within the next hour"
+    },
+    {
+      "code": 6022,
+      "name": "invalidSessionDelegate",
+      "msg": "Session delegate does not match"
+    },
+    {
+      "code": 6023,
+      "name": "sessionExpired",
+      "msg": "Session authorization has expired"
     }
   ],
   "types": [
@@ -1352,6 +1634,34 @@ export type Dreadtide = {
           {
             "name": "winner",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "matchSession",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "delegate",
+            "type": "pubkey"
+          },
+          {
+            "name": "expiresAt",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

@@ -102,6 +102,10 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(58px, 6.5vw, 82px); line-heig
 .console-card .forfeit-button { margin-top:8px; border-color:#8d3c34; background:transparent; color:#ff806f; }
 .console-card .forfeit-button:hover { border-color:#e85d4a; background:#2b0d0b; }
 .console-message { min-height:20px; margin:24px 0 0; color:var(--signal); font:700 11px/1.4 monospace; }
+.session-control { margin:28px 0; padding:20px 22px; border:1px solid var(--line); background:#03101f; display:flex; align-items:center; justify-content:space-between; gap:24px; }
+.session-control h3 { margin:5px 0 4px; color:var(--paper); font-size:20px; }
+.session-control p:last-child { margin:0; max-width:720px; color:var(--muted); font-size:13px; }
+.session-control button { flex:0 0 auto; min-width:220px; }
 .economy-panel { margin-bottom:32px; padding:22px 0; border-block:1px solid var(--line); display:grid; grid-template-columns:1.1fr 1fr 1fr auto; gap:28px; align-items:end; }
 .economy-balance h3 { margin:0; font-size:42px; line-height:1; }
 .economy-balance h3 span { color:var(--signal); font-size:18px; }
@@ -226,6 +230,8 @@ footer a { color: var(--signal); text-decoration: none; }
   .spectator-entry label { grid-column:auto; }
   .console-grid { grid-template-columns:1fr; }
   .economy-panel { grid-template-columns:1fr; align-items:stretch; }
+  .session-control { align-items:stretch; flex-direction:column; }
+  .session-control button { width:100%; }
   .economy-onboard { grid-column:auto; align-items:stretch; flex-direction:column; }
   .console-card,.console-card:last-child { min-height:0; margin:0; padding:28px 0; border-right:0; border-bottom:1px solid var(--line); }
   .console-card:last-child { border-bottom:0; }
