@@ -25,6 +25,7 @@ describe("local validator match", () => {
     const gameIdBytes = Buffer.alloc(8);
     gameIdBytes.writeBigUInt64LE(gameId);
     const [gamePda] = PublicKey.findProgramAddressSync([Buffer.from("game"), creator.publicKey.toBuffer(), gameIdBytes], programId);
+    const [battleClock] = PublicKey.findProgramAddressSync([Buffer.from("battle-clock"), gamePda.toBuffer()], programId);
     const [creatorProfile] = PublicKey.findProgramAddressSync([Buffer.from("profile"), creator.publicKey.toBuffer()], programId);
     const [opponentProfile] = PublicKey.findProgramAddressSync([Buffer.from("profile"), opponent.publicKey.toBuffer()], programId);
     const [stakePda] = PublicKey.findProgramAddressSync([Buffer.from("stake"), gamePda.toBuffer()], programId);
@@ -56,6 +57,7 @@ describe("local validator match", () => {
     const opponentRoot = Array.from(opponentTree[6][0]);
 
     await program.methods.createGame(new BN(gameId.toString())).accountsStrict({ game: gamePda, creator: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
+    await program.methods.initializeBattleClock().accountsStrict({ game: gamePda, battleClock, creator: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
     await program.methods.openStake(new BN(50)).accountsStrict({ game: gamePda, stake: stakePda, creatorProfile, creator: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
     const created = await program.account.game.fetch(gamePda);
     const chainTime = await connection.getBlockTime(await connection.getSlot("confirmed"));
@@ -63,8 +65,14 @@ describe("local validator match", () => {
     expect(Number(created.deadline.toString()) - (chainTime ?? Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(920);
     await program.methods.joinGame().accountsStrict({ game: gamePda, opponent: opponent.publicKey }).signers([opponent]).rpc();
     await program.methods.acceptStake().accountsStrict({ game: gamePda, stake: stakePda, opponentProfile, opponent: opponent.publicKey }).signers([opponent]).rpc();
-    await program.methods.commitBoard(creatorRoot).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
-    await program.methods.commitBoard(opponentRoot).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
+    await program.methods.commitBoardTimed(creatorRoot).accountsStrict({ game: gamePda, battleClock, player: creator.publicKey }).rpc();
+    await program.methods.commitBoardTimed(opponentRoot).accountsStrict({ game: gamePda, battleClock, player: opponent.publicKey }).signers([opponent]).rpc();
+    const activeClock = await program.account.battleClock.fetch(battleClock);
+    const combatState = await program.account.game.fetch(gamePda);
+    expect(activeClock.battleDeadline.toString()).toBe(combatState.deadline.toString());
+    const combatChainTime = await connection.getBlockTime(await connection.getSlot("confirmed"));
+    expect(Number(activeClock.battleDeadline.toString()) - (combatChainTime ?? Math.floor(Date.now() / 1000))).toBeGreaterThanOrEqual(280);
+    expect(Number(activeClock.battleDeadline.toString()) - (combatChainTime ?? Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(300);
 
     const creatorDelegate = Keypair.generate();
     const opponentDelegate = Keypair.generate();
@@ -78,14 +86,14 @@ describe("local validator match", () => {
     await program.methods.authorizeSession(creatorDelegate.publicKey, new BN(expiresAt)).accountsStrict({ game: gamePda, session: creatorSession, player: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
     await program.methods.authorizeSession(opponentDelegate.publicKey, new BN(expiresAt)).accountsStrict({ game: gamePda, session: opponentSession, player: opponent.publicKey, systemProgram: SystemProgram.programId }).signers([opponent]).rpc();
 
-    await program.methods.fireSession(18).accountsStrict({ game: gamePda, session: creatorSession, delegate: creatorDelegate.publicKey }).signers([creatorDelegate]).rpc();
-    await expect(program.methods.fire(19).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc()).rejects.toThrow();
+    await program.methods.fireSessionTimed(18).accountsStrict({ game: gamePda, battleClock, session: creatorSession, delegate: creatorDelegate.publicKey }).signers([creatorDelegate]).rpc();
+    await expect(program.methods.fireTimed(19).accountsStrict({ game: gamePda, battleClock, player: creator.publicKey }).rpc()).rejects.toThrow();
     const cellSalt = Array.from(await salt(opponentSeed, 18));
     const siblings = proof(opponentTree, 18).map((item) => Array.from(item));
     const wrongSalt = [...cellSalt];
     wrongSalt[0] ^= 1;
-    await expect(program.methods.respond(true, wrongSalt, siblings).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc()).rejects.toThrow();
-    await program.methods.respondSession(true, cellSalt, siblings).accountsStrict({ game: gamePda, session: opponentSession, delegate: opponentDelegate.publicKey }).signers([opponentDelegate]).rpc();
+    await expect(program.methods.respondTimed(true, wrongSalt, siblings).accountsStrict({ game: gamePda, battleClock, player: opponent.publicKey }).signers([opponent]).rpc()).rejects.toThrow();
+    await program.methods.respondSessionTimed(true, cellSalt, siblings).accountsStrict({ game: gamePda, battleClock, session: opponentSession, delegate: opponentDelegate.publicKey }).signers([opponentDelegate]).rpc();
     await program.methods.revokeSession().accountsStrict({ game: gamePda, session: creatorSession, player: creator.publicKey }).rpc();
     expect(await connection.getAccountInfo(creatorSession, "confirmed")).toBeNull();
 
@@ -94,19 +102,19 @@ describe("local validator match", () => {
     expect(state.shots[1].toString()).toBe((1n << 18n).toString());
     expect(state.phase).toEqual({ fire: {} });
     expect(state.turn).toBe(1);
-    await expect(program.methods.fire(18).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc()).rejects.toThrow();
+    await expect(program.methods.fireTimed(18).accountsStrict({ game: gamePda, battleClock, player: creator.publicKey }).rpc()).rejects.toThrow();
 
     const remainingHits = board.flatMap((occupied, index) => occupied && index !== 18 ? [index] : []);
     const misses = board.flatMap((occupied, index) => !occupied ? [index] : []).slice(0, remainingHits.length);
     for (let round = 0; round < remainingHits.length; round++) {
       const miss = misses[round];
-      await program.methods.fire(miss).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
-      await program.methods.respond(false, Array.from(await salt(creatorSeed, miss)), proof(creatorTree, miss).map((item) => Array.from(item)))
-        .accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
+      await program.methods.fireTimed(miss).accountsStrict({ game: gamePda, battleClock, player: opponent.publicKey }).signers([opponent]).rpc();
+      await program.methods.respondTimed(false, Array.from(await salt(creatorSeed, miss)), proof(creatorTree, miss).map((item) => Array.from(item)))
+        .accountsStrict({ game: gamePda, battleClock, player: creator.publicKey }).rpc();
       const hit = remainingHits[round];
-      await program.methods.fire(hit).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
-      await program.methods.respond(true, Array.from(await salt(opponentSeed, hit)), proof(opponentTree, hit).map((item) => Array.from(item)))
-        .accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
+      await program.methods.fireTimed(hit).accountsStrict({ game: gamePda, battleClock, player: creator.publicKey }).rpc();
+      await program.methods.respondTimed(true, Array.from(await salt(opponentSeed, hit)), proof(opponentTree, hit).map((item) => Array.from(item)))
+        .accountsStrict({ game: gamePda, battleClock, player: opponent.publicKey }).signers([opponent]).rpc();
     }
     const provisional = await program.account.game.fetch(gamePda);
     expect(provisional.hits[1]).toBe(12);

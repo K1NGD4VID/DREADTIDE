@@ -250,3 +250,33 @@ fn forfeit_before_opponent_commit_has_no_verified_winner() {
     assert_eq!(game.claimant, u8::MAX);
     assert_eq!(game.audited_winner, u8::MAX);
 }
+
+#[test]
+fn expired_response_disqualifies_staller_without_counting_a_hit() {
+    let (mut game, seed0, _, _) = committed_game();
+    let creator = game.creator;
+    game.fire(&creator, 18, 10).unwrap();
+    let shots_before = game.shots;
+    let hits_before = game.hits;
+    assert_eq!(game.expire_response(41).unwrap(), 0);
+    assert_eq!(game.shots, shots_before);
+    assert_eq!(game.hits, hits_before);
+    assert_eq!(game.phase, Phase::Audit);
+    assert_eq!(game.claimant, 0);
+    assert_eq!(game.audit_attempts & 0b11, 0b10);
+    assert!(game.audit_board(&creator, &seed0, &ships(), 42).unwrap());
+    assert_eq!(game.audited_winner, 0);
+}
+
+#[test]
+fn invalid_attacker_board_after_response_timeout_produces_no_winner() {
+    let (mut game, _, _, _) = committed_game();
+    let creator = game.creator;
+    game.fire(&creator, 18, 10).unwrap();
+    game.expire_response(41).unwrap();
+    let mut illegal = ships();
+    illegal[0].x = 7;
+    assert!(!game.audit_board(&creator, &[7; 32], &illegal, 42).unwrap());
+    assert_eq!(game.phase, Phase::NoVerifiedWinner);
+    assert_eq!(game.audited_winner, u8::MAX);
+}

@@ -59,6 +59,10 @@ impl Game {
         }
     }
 
+    pub fn is_timed(&self) -> bool {
+        self.audit_attempts & crate::battle_clock::TIMED_MATCH_FLAG != 0
+    }
+
     pub fn player(&self, index: u8) -> Pubkey {
         if index == 0 {
             self.creator
@@ -216,6 +220,21 @@ impl Game {
         Ok(())
     }
 
+    pub fn expire_response(&mut self, now: i64) -> Result<u8> {
+        require!(self.phase == Phase::Respond, DreadtideError::WrongPhase);
+        let claimant = self.pending_attacker;
+        require!(claimant < 2, DreadtideError::WrongPhase);
+        let defender = 1 - claimant;
+        // Missing a response never manufactures a hit. It only makes the
+        // non-responsive defender ineligible and sends the attacker through
+        // the normal committed-board audit.
+        self.audit_attempts |= 1 << defender;
+        self.pending_index = u8::MAX;
+        self.pending_attacker = u8::MAX;
+        self.enter_audit(claimant, now)?;
+        Ok(claimant)
+    }
+
     pub fn audit_board(
         &mut self,
         signer: &Pubkey,
@@ -322,4 +341,12 @@ pub enum DreadtideError {
     InvalidSessionDelegate,
     #[msg("Session authorization has expired")]
     SessionExpired,
+    #[msg("Timed matches must use the battle-clock instructions")]
+    LegacyInstructionDisabled,
+    #[msg("This match does not have a battle clock")]
+    TimedMatchRequired,
+    #[msg("Too little battle time remains for a fair response window")]
+    InsufficientResponseWindow,
+    #[msg("The defender response window has passed")]
+    ResponseDeadlinePassed,
 }

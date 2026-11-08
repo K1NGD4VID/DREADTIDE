@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+pub mod battle_clock;
 pub mod crypto;
 pub mod economy;
 pub mod fleet;
@@ -62,7 +63,27 @@ pub mod dreadtide {
         Ok(())
     }
 
+    pub fn initialize_battle_clock(ctx: Context<InitializeBattleClock>) -> Result<()> {
+        let game = &mut ctx.accounts.game;
+        require!(game.phase == Phase::Lobby, DreadtideError::WrongPhase);
+        require!(
+            game.creator == ctx.accounts.creator.key(),
+            DreadtideError::WrongPlayer
+        );
+        game.audit_attempts |= battle_clock::TIMED_MATCH_FLAG;
+        let clock = &mut ctx.accounts.battle_clock;
+        clock.game = game.key();
+        clock.battle_deadline = 0;
+        clock.response_deadline = 0;
+        clock.bump = ctx.bumps.battle_clock;
+        Ok(())
+    }
+
     pub fn commit_board(ctx: Context<PlayerAction>, root: [u8; 32]) -> Result<()> {
+        require!(
+            !ctx.accounts.game.is_timed(),
+            DreadtideError::LegacyInstructionDisabled
+        );
         let now = Clock::get()?.unix_timestamp;
         let game = &mut ctx.accounts.game;
         require!(game.phase == Phase::Commit, DreadtideError::WrongPhase);
@@ -83,11 +104,60 @@ pub mod dreadtide {
         Ok(())
     }
 
+    pub fn commit_board_timed(ctx: Context<TimedPlayerAction>, root: [u8; 32]) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let game = &mut ctx.accounts.game;
+        require!(game.is_timed(), DreadtideError::TimedMatchRequired);
+        require!(game.phase == Phase::Commit, DreadtideError::WrongPhase);
+        require!(now <= game.deadline, DreadtideError::DeadlinePassed);
+        let player = game
+            .player_index(&ctx.accounts.player.key())
+            .ok_or(DreadtideError::NotPlayer)? as usize;
+        require!(!game.committed[player], DreadtideError::AlreadyCommitted);
+        game.roots[player] = root;
+        game.committed[player] = true;
+        if game.committed[0] && game.committed[1] {
+            let battle_deadline = now
+                .checked_add(BATTLE_SECONDS)
+                .ok_or(DreadtideError::ClockOverflow)?;
+            game.phase = Phase::Fire;
+            game.turn = 0;
+            game.deadline = battle_deadline;
+            ctx.accounts.battle_clock.battle_deadline = battle_deadline;
+            ctx.accounts.battle_clock.response_deadline = 0;
+        }
+        Ok(())
+    }
+
     pub fn fire(ctx: Context<PlayerAction>, index: u8) -> Result<()> {
+        require!(
+            !ctx.accounts.game.is_timed(),
+            DreadtideError::LegacyInstructionDisabled
+        );
         let now = Clock::get()?.unix_timestamp;
         ctx.accounts
             .game
             .fire(&ctx.accounts.player.key(), index, now)
+    }
+
+    pub fn fire_timed(ctx: Context<TimedPlayerAction>, index: u8) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let clock = &mut ctx.accounts.battle_clock;
+        require!(
+            ctx.accounts.game.is_timed(),
+            DreadtideError::TimedMatchRequired
+        );
+        require!(
+            now <= clock.battle_deadline - battle_clock::RESPONSE_SECONDS,
+            DreadtideError::InsufficientResponseWindow
+        );
+        ctx.accounts
+            .game
+            .fire(&ctx.accounts.player.key(), index, now)?;
+        clock.response_deadline = now
+            .checked_add(battle_clock::RESPONSE_SECONDS)
+            .ok_or(DreadtideError::ClockOverflow)?;
+        Ok(())
     }
 
     pub fn respond(
@@ -96,6 +166,10 @@ pub mod dreadtide {
         cell_salt: [u8; 32],
         siblings: [[u8; 32]; 6],
     ) -> Result<()> {
+        require!(
+            !ctx.accounts.game.is_timed(),
+            DreadtideError::LegacyInstructionDisabled
+        );
         let now = Clock::get()?.unix_timestamp;
         let game = &mut ctx.accounts.game;
         let shot = game.respond(
@@ -116,9 +190,63 @@ pub mod dreadtide {
         Ok(())
     }
 
+    pub fn respond_timed(
+        ctx: Context<TimedPlayerAction>,
+        is_ship: bool,
+        cell_salt: [u8; 32],
+        siblings: [[u8; 32]; 6],
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        require!(
+            ctx.accounts.game.is_timed(),
+            DreadtideError::TimedMatchRequired
+        );
+        require!(
+            now <= ctx.accounts.battle_clock.response_deadline,
+            DreadtideError::ResponseDeadlinePassed
+        );
+        let game = &mut ctx.accounts.game;
+        let shot = game.respond(
+            &ctx.accounts.player.key(),
+            is_ship,
+            &cell_salt,
+            &siblings,
+            now,
+        )?;
+        ctx.accounts.battle_clock.response_deadline = 0;
+        emit!(state::ShotVerified {
+            game: game.key(),
+            attacker: game.player(shot.attacker),
+            defender: game.player(shot.defender),
+            index: shot.index,
+            is_ship: shot.is_ship,
+            root: game.roots[shot.defender as usize]
+        });
+        Ok(())
+    }
+
     pub fn claim_timeout(ctx: Context<ClaimTimeout>) -> Result<()> {
+        require!(
+            !ctx.accounts.game.is_timed(),
+            DreadtideError::LegacyInstructionDisabled
+        );
         let now = Clock::get()?.unix_timestamp;
         ctx.accounts.game.claim_timeout(now)
+    }
+
+    pub fn claim_timeout_timed(ctx: Context<ClaimTimedTimeout>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let game = &mut ctx.accounts.game;
+        require!(game.is_timed(), DreadtideError::TimedMatchRequired);
+        if game.phase == Phase::Respond && now > ctx.accounts.battle_clock.response_deadline {
+            game.expire_response(now)?;
+            return Ok(());
+        }
+        require!(
+            now > ctx.accounts.battle_clock.battle_deadline,
+            DreadtideError::DeadlineNotPassed
+        );
+        game.claim_timeout(now)
     }
 
     pub fn audit_board(
@@ -204,11 +332,35 @@ pub mod dreadtide {
     }
 
     pub fn fire_session(ctx: Context<SessionAction>, index: u8) -> Result<()> {
+        require!(
+            !ctx.accounts.game.is_timed(),
+            DreadtideError::LegacyInstructionDisabled
+        );
         let now = Clock::get()?.unix_timestamp;
         ctx.accounts.validate(now)?;
         ctx.accounts
             .game
             .fire(&ctx.accounts.session.player, index, now)
+    }
+
+    pub fn fire_session_timed(ctx: Context<TimedSessionAction>, index: u8) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        ctx.accounts.validate(now)?;
+        require!(
+            ctx.accounts.game.is_timed(),
+            DreadtideError::TimedMatchRequired
+        );
+        require!(
+            now <= ctx.accounts.battle_clock.battle_deadline - battle_clock::RESPONSE_SECONDS,
+            DreadtideError::InsufficientResponseWindow
+        );
+        ctx.accounts
+            .game
+            .fire(&ctx.accounts.session.player, index, now)?;
+        ctx.accounts.battle_clock.response_deadline = now
+            .checked_add(battle_clock::RESPONSE_SECONDS)
+            .ok_or(DreadtideError::ClockOverflow)?;
+        Ok(())
     }
 
     pub fn respond_session(
@@ -217,6 +369,10 @@ pub mod dreadtide {
         cell_salt: [u8; 32],
         siblings: [[u8; 32]; 6],
     ) -> Result<()> {
+        require!(
+            !ctx.accounts.game.is_timed(),
+            DreadtideError::LegacyInstructionDisabled
+        );
         let now = Clock::get()?.unix_timestamp;
         ctx.accounts.validate(now)?;
         let game = &mut ctx.accounts.game;
@@ -227,6 +383,42 @@ pub mod dreadtide {
             &siblings,
             now,
         )?;
+        emit!(state::ShotVerified {
+            game: game.key(),
+            attacker: game.player(shot.attacker),
+            defender: game.player(shot.defender),
+            index: shot.index,
+            is_ship: shot.is_ship,
+            root: game.roots[shot.defender as usize]
+        });
+        Ok(())
+    }
+
+    pub fn respond_session_timed(
+        ctx: Context<TimedSessionAction>,
+        is_ship: bool,
+        cell_salt: [u8; 32],
+        siblings: [[u8; 32]; 6],
+    ) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        ctx.accounts.validate(now)?;
+        require!(
+            ctx.accounts.game.is_timed(),
+            DreadtideError::TimedMatchRequired
+        );
+        require!(
+            now <= ctx.accounts.battle_clock.response_deadline,
+            DreadtideError::ResponseDeadlinePassed
+        );
+        let game = &mut ctx.accounts.game;
+        let shot = game.respond(
+            &ctx.accounts.session.player,
+            is_ship,
+            &cell_salt,
+            &siblings,
+            now,
+        )?;
+        ctx.accounts.battle_clock.response_deadline = 0;
         emit!(state::ShotVerified {
             game: game.key(),
             attacker: game.player(shot.attacker),
@@ -323,6 +515,10 @@ pub mod dreadtide {
 
     pub fn accept_stake(ctx: Context<AcceptStake>) -> Result<()> {
         require!(
+            ctx.accounts.game.phase == Phase::Commit,
+            DreadtideError::WrongPhase
+        );
+        require!(
             ctx.accounts.game.opponent == ctx.accounts.opponent.key(),
             DreadtideError::WrongPlayer
         );
@@ -350,6 +546,10 @@ pub mod dreadtide {
             .ok_or(DreadtideError::ArithmeticOverflow)?;
         let (winner, refunded) = match ctx.accounts.game.phase {
             Phase::VerifiedFinished => {
+                require!(
+                    ctx.accounts.game.audited_winner < 2,
+                    DreadtideError::MatchNotFinished
+                );
                 if ctx.accounts.game.audited_winner == 0 {
                     ctx.accounts.creator_profile.credit(pot)?;
                     (ctx.accounts.game.creator, false)
@@ -398,6 +598,17 @@ pub struct JoinGame<'info> {
 }
 
 #[derive(Accounts)]
+pub struct InitializeBattleClock<'info> {
+    #[account(mut, seeds = [b"game", game.creator.as_ref(), &game.game_id.to_le_bytes()], bump = game.bump)]
+    pub game: Account<'info, Game>,
+    #[account(init, payer = creator, space = 8 + battle_clock::BattleClock::SPACE, seeds = [b"battle-clock", game.key().as_ref()], bump)]
+    pub battle_clock: Account<'info, battle_clock::BattleClock>,
+    #[account(mut)]
+    pub creator: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
 pub struct PlayerAction<'info> {
     #[account(mut, seeds = [b"game", game.creator.as_ref(), &game.game_id.to_le_bytes()], bump = game.bump)]
     pub game: Account<'info, Game>,
@@ -405,9 +616,27 @@ pub struct PlayerAction<'info> {
 }
 
 #[derive(Accounts)]
+pub struct TimedPlayerAction<'info> {
+    #[account(mut, seeds = [b"game", game.creator.as_ref(), &game.game_id.to_le_bytes()], bump = game.bump)]
+    pub game: Account<'info, Game>,
+    #[account(mut, seeds = [b"battle-clock", game.key().as_ref()], bump = battle_clock.bump, constraint = battle_clock.game == game.key())]
+    pub battle_clock: Account<'info, battle_clock::BattleClock>,
+    pub player: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct ClaimTimeout<'info> {
     #[account(mut, seeds = [b"game", game.creator.as_ref(), &game.game_id.to_le_bytes()], bump = game.bump)]
     pub game: Account<'info, Game>,
+    pub caller: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimTimedTimeout<'info> {
+    #[account(mut, seeds = [b"game", game.creator.as_ref(), &game.game_id.to_le_bytes()], bump = game.bump)]
+    pub game: Account<'info, Game>,
+    #[account(mut, seeds = [b"battle-clock", game.key().as_ref()], bump = battle_clock.bump, constraint = battle_clock.game == game.key())]
+    pub battle_clock: Account<'info, battle_clock::BattleClock>,
     pub caller: Signer<'info>,
 }
 
@@ -502,6 +731,31 @@ pub struct SessionAction<'info> {
 }
 
 impl<'info> SessionAction<'info> {
+    fn validate(&self, now: i64) -> Result<()> {
+        require!(
+            self.session.delegate == self.delegate.key(),
+            DreadtideError::InvalidSessionDelegate
+        );
+        require!(
+            now <= self.session.expires_at,
+            DreadtideError::SessionExpired
+        );
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct TimedSessionAction<'info> {
+    #[account(mut, seeds = [b"game", game.creator.as_ref(), &game.game_id.to_le_bytes()], bump = game.bump)]
+    pub game: Account<'info, Game>,
+    #[account(mut, seeds = [b"battle-clock", game.key().as_ref()], bump = battle_clock.bump, constraint = battle_clock.game == game.key())]
+    pub battle_clock: Account<'info, battle_clock::BattleClock>,
+    #[account(seeds = [b"session", game.key().as_ref(), session.player.as_ref()], bump = session.bump, constraint = session.game == game.key())]
+    pub session: Account<'info, session::MatchSession>,
+    pub delegate: Signer<'info>,
+}
+
+impl<'info> TimedSessionAction<'info> {
     fn validate(&self, now: i64) -> Result<()> {
         require!(
             self.session.delegate == self.delegate.key(),

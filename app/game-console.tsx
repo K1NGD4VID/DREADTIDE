@@ -77,6 +77,9 @@ function errorMessage(error: unknown, fallback: string): string {
   if (value.includes("InvalidSessionExpiry")) return "The seamless-play session must expire within one hour.";
   if (value.includes("InvalidSessionDelegate")) return "This browser no longer holds the authorized match key. Re-enable seamless play.";
   if (value.includes("SessionExpired")) return "Your seamless-play session expired. Enable it again to remove Fire and Prove prompts.";
+  if (value.includes("ResponseDeadlinePassed")) return "The 30-second proof window expired. Resolve the timeout from the battle controls.";
+  if (value.includes("InsufficientResponseWindow")) return "Less than 30 seconds remain. No new shot can start; resolve the match when the battle clock expires.";
+  if (value.includes("LegacyInstructionDisabled")) return "This timed match requires the latest battle client. Refresh the page and try again.";
   if (value.includes("AccountAlreadyInUse") || value.includes("already in use")) return "That match identifier was already used. Press Create Match again for a fresh one.";
   if (value.toLowerCase().includes("insufficient") || value.toLowerCase().includes("0x1")) return "This wallet needs Devnet SOL to pay the transaction fee.";
   if (value.toLowerCase().includes("reject") || value.toLowerCase().includes("cancel")) return "The wallet request was cancelled. No transaction was sent.";
@@ -97,6 +100,7 @@ export function GameConsole() {
   const [committed, setCommitted] = useState("0 / 2");
   const [myCommitted, setMyCommitted] = useState(false);
   const [deadline, setDeadline] = useState(0);
+  const [responseDeadline, setResponseDeadline] = useState(0);
   const [clockNow, setClockNow] = useState(() => Math.floor(Date.now() / 1000));
   const [busy, setBusy] = useState(false);
   const [fleet, setFleet] = useState<FleetPlacement[]>(() => emptyFleet());
@@ -122,6 +126,11 @@ export function GameConsole() {
   const program = useMemo(() => new Program<Dreadtide>(idl as Dreadtide, new AnchorProvider(connection, wallet ?? readonlyWallet, { commitment: "confirmed" })), [connection, readonlyWallet, wallet]);
   const profileAddress = useMemo(() => publicKey ? PublicKey.findProgramAddressSync([Buffer.from("profile"), publicKey.toBuffer()], PROGRAM_ID)[0] : null, [publicKey]);
   const sessionAddress = useMemo(() => publicKey && activeGameAddress ? PublicKey.findProgramAddressSync([Buffer.from("session"), new PublicKey(activeGameAddress).toBuffer(), publicKey.toBuffer()], PROGRAM_ID)[0] : null, [activeGameAddress, publicKey]);
+  const battleClockFor = useCallback((game: PublicKey) => PublicKey.findProgramAddressSync([Buffer.from("battle-clock"), game.toBuffer()], PROGRAM_ID)[0], []);
+  const timedClockFor = useCallback(async (game: PublicKey) => {
+    const battleClock = battleClockFor(game);
+    return (await connection.getAccountInfo(battleClock, "confirmed")) ? battleClock : null;
+  }, [battleClockFor, connection]);
 
   const refreshEconomy = useCallback(async () => {
     if (!profileAddress) { setProfileExists(false); setDBalance(0); return; }
@@ -142,6 +151,10 @@ export function GameConsole() {
       setPlayers(state.opponent?.toBase58?.() && state.opponent.toBase58() !== EMPTY_KEY.toBase58() ? "Opponent joined" : "Waiting for opponent");
       setGameId(state.gameId.toString());
       setDeadline(Number(state.deadline.toString()));
+      try {
+        const clock = await program.account.battleClock.fetch(battleClockFor(new PublicKey(address))) as any;
+        setResponseDeadline(Number(clock.responseDeadline.toString()));
+      } catch { setResponseDeadline(0); }
       const index = publicKey?.equals(state.creator) ? 0 : publicKey?.equals(state.opponent) ? 1 : -1;
       setPlayerIndex(index);
       if (index === 0) setRole("Creator");
@@ -151,7 +164,7 @@ export function GameConsole() {
     } catch {
       setMessage("Could not read that game account. Check the address and Devnet network.");
     }
-  }, [activeGameAddress, program, publicKey]);
+  }, [activeGameAddress, battleClockFor, program, publicKey]);
 
   const walletAddress = publicKey?.toBase58();
   useEffect(() => {
@@ -160,6 +173,7 @@ export function GameConsole() {
     setRole("Not assigned");
     setPhase("LOBBY");
     setDeadline(0);
+    setResponseDeadline(0);
     setCommitted("0 / 2");
     setMyCommitted(false);
     setPlayerIndex(-1);
@@ -245,22 +259,26 @@ export function GameConsole() {
         const { keypair: bot, fleet: botFleet } = restoreBot(record);
         const opponentProgram = botProgram(connection, bot);
         const game = new PublicKey(activeGameAddress);
+        const battleClock = await timedClockFor(game);
         const state = await opponentProgram.account.game.fetch(game) as any;
         const currentPhase = phaseName(state.phase);
         if (!bot.publicKey.equals(state.opponent)) return;
         if (currentPhase === "commit" && !state.committed[1]) {
-          await opponentProgram.methods.commitBoard(record.root).accountsStrict({ game, player: bot.publicKey }).rpc();
+          if (battleClock) await opponentProgram.methods.commitBoardTimed(record.root).accountsStrict({ game, battleClock, player: bot.publicKey }).rpc();
+          else await opponentProgram.methods.commitBoard(record.root).accountsStrict({ game, player: bot.publicKey }).rpc();
           setMessage("Browser bot locked its hidden fleet. Waiting for your commitment.");
         } else if (currentPhase === "fire" && state.turn === 1) {
           const target = chooseBotTarget(BigInt(state.shots[0].toString()));
-          await opponentProgram.methods.fire(target).accountsStrict({ game, player: bot.publicKey }).rpc();
+          if (battleClock) await opponentProgram.methods.fireTimed(target).accountsStrict({ game, battleClock, player: bot.publicKey }).rpc();
+          else await opponentProgram.methods.fire(target).accountsStrict({ game, player: bot.publicKey }).rpc();
           setMessage(`Browser bot fired at ${String.fromCharCode(65 + target % 8)}${Math.floor(target / 8) + 1}. Prove the result from your fleet.`);
         } else if (currentPhase === "respond" && state.pendingAttacker === 0) {
           const index = state.pendingIndex;
           const board = occupancy(botFleet);
           const seed = Uint8Array.from(record.seed);
           const levels = await tree(BigInt(state.gameId.toString()), bot.publicKey.toBytes(), seed, board);
-          await opponentProgram.methods.respond(board[index], Array.from(await salt(seed, index)), proof(levels, index).map((item) => Array.from(item))).accountsStrict({ game, player: bot.publicKey }).rpc();
+          if (battleClock) await opponentProgram.methods.respondTimed(board[index], Array.from(await salt(seed, index)), proof(levels, index).map((item) => Array.from(item))).accountsStrict({ game, battleClock, player: bot.publicKey }).rpc();
+          else await opponentProgram.methods.respond(board[index], Array.from(await salt(seed, index)), proof(levels, index).map((item) => Array.from(item))).accountsStrict({ game, player: bot.publicKey }).rpc();
           setMessage(`Bot proof verified: your shot at ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1} was a ${board[index] ? "hit" : "miss"}.`);
         } else if (currentPhase === "audit" && state.claimant === 1) {
           await opponentProgram.methods.auditBoard(record.seed, record.placements).accountsStrict({ game, player: bot.publicKey }).rpc();
@@ -274,7 +292,7 @@ export function GameConsole() {
     };
     const timer = window.setTimeout(() => void runBot(), 900);
     return () => window.clearTimeout(timer);
-  }, [activeGameAddress, battleState.pendingIndex, battleState.shots, battleState.turn, connection, loadShotHistory, phase, refresh]);
+  }, [activeGameAddress, battleState.pendingIndex, battleState.shots, battleState.turn, connection, loadShotHistory, phase, refresh, timedClockFor]);
   useEffect(() => {
     if (!publicKey || !activeGameAddress || settlementBusy.current || !["VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase)) return;
     const settle = async () => {
@@ -317,9 +335,11 @@ export function GameConsole() {
         }
       }
       if (!pda) throw new Error("Could not reserve a unique match identifier. Please try again.");
+      const battleClock = battleClockFor(pda);
       setGameId(id.toString());
       setMessage("Awaiting wallet approval...");
       await program.methods.createGame(new BN(id.toString())).accountsStrict({ game: pda, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
+      await program.methods.initializeBattleClock().accountsStrict({ game: pda, battleClock, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
       if (profileExists && stakeAmount >= 50) {
         const [stake] = PublicKey.findProgramAddressSync([Buffer.from("stake"), pda.toBuffer()], PROGRAM_ID);
         await program.methods.openStake(new BN(stakeAmount)).accountsStrict({ game: pda, stake, creatorProfile: profileAddress!, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
@@ -343,7 +363,9 @@ export function GameConsole() {
       const id = uniqueGameId();
       const idBytes = Buffer.alloc(8); idBytes.writeBigUInt64LE(id);
       const [game] = PublicKey.findProgramAddressSync([Buffer.from("game"), publicKey.toBuffer(), idBytes], PROGRAM_ID);
+      const battleClock = battleClockFor(game);
       await program.methods.createGame(new BN(id.toString())).accountsStrict({ game, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
+      await program.methods.initializeBattleClock().accountsStrict({ game, battleClock, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
       const record = await createBotRecord(game.toBase58(), id);
       const { keypair: bot } = restoreBot(record);
       setMessage("Approve 0.01 Devnet SOL to fund the local bot's transaction fees. This has no real-world value.");
@@ -502,7 +524,10 @@ export function GameConsole() {
       const record: FleetSecret = { schemaVersion: 1, matchAddress: activeGameAddress, playerAddress: publicKey.toBase58(), gameId: state.gameId.toString(), placements: fleet.map(({ x, y, vertical }) => ({ x, y, vertical })), seed: Array.from(seed), root };
       localStorage.setItem(secretKey(activeGameAddress, publicKey.toBase58()), JSON.stringify(record));
       setHasRecovery(true);
-      await program.methods.commitBoard(root).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      const game = new PublicKey(activeGameAddress);
+      const battleClock = await timedClockFor(game);
+      if (battleClock) await program.methods.commitBoardTimed(root).accountsStrict({ game, battleClock, player: publicKey }).rpc();
+      else await program.methods.commitBoard(root).accountsStrict({ game, player: publicKey }).rpc();
       await refresh();
       setMessage("Fleet committed. Your board remains hidden until an audit.");
     } catch (error) { setMessage(errorMessage(error, "Commit transaction failed.")); }
@@ -620,10 +645,17 @@ export function GameConsole() {
       const defender = 1 - currentIndex;
       if ((BigInt(state.shots[defender].toString()) & (1n << BigInt(index))) !== 0n) throw new Error("DuplicateShot");
       if (session) {
-        const transaction = await program.methods.fireSession(index).accountsStrict({ game: new PublicKey(activeGameAddress), session: session.session, delegate: session.delegate.publicKey }).transaction();
+        const game = new PublicKey(activeGameAddress);
+        const battleClock = await timedClockFor(game);
+        const transaction = battleClock
+          ? await program.methods.fireSessionTimed(index).accountsStrict({ game, battleClock, session: session.session, delegate: session.delegate.publicKey }).transaction()
+          : await program.methods.fireSession(index).accountsStrict({ game, session: session.session, delegate: session.delegate.publicKey }).transaction();
         await submitSignedTransaction(transaction, session.delegate);
       } else {
-        await program.methods.fire(index).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+        const game = new PublicKey(activeGameAddress);
+        const battleClock = await timedClockFor(game);
+        if (battleClock) await program.methods.fireTimed(index).accountsStrict({ game, battleClock, player: publicKey }).rpc();
+        else await program.methods.fire(index).accountsStrict({ game, player: publicKey }).rpc();
       }
       await refresh();
       setMessage("Attack confirmed. Waiting for the defender's cryptographic response.");
@@ -650,10 +682,17 @@ export function GameConsole() {
       const session = requireMatchSession();
       setMessage(session ? `Proving ${board[index] ? "hit" : "miss"} with your match session...` : `Devnet response transaction: prove ${board[index] ? "hit" : "miss"} at ${String.fromCharCode(65 + index % 8)}${Math.floor(index / 8) + 1}. Confirm in your wallet.`);
       if (session) {
-        const transaction = await program.methods.respondSession(board[index], Array.from(cellSalt), siblings).accountsStrict({ game: new PublicKey(activeGameAddress), session: session.session, delegate: session.delegate.publicKey }).transaction();
+        const game = new PublicKey(activeGameAddress);
+        const battleClock = await timedClockFor(game);
+        const transaction = battleClock
+          ? await program.methods.respondSessionTimed(board[index], Array.from(cellSalt), siblings).accountsStrict({ game, battleClock, session: session.session, delegate: session.delegate.publicKey }).transaction()
+          : await program.methods.respondSession(board[index], Array.from(cellSalt), siblings).accountsStrict({ game, session: session.session, delegate: session.delegate.publicKey }).transaction();
         await submitSignedTransaction(transaction, session.delegate);
       } else {
-        await program.methods.respond(board[index], Array.from(cellSalt), siblings).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+        const game = new PublicKey(activeGameAddress);
+        const battleClock = await timedClockFor(game);
+        if (battleClock) await program.methods.respondTimed(board[index], Array.from(cellSalt), siblings).accountsStrict({ game, battleClock, player: publicKey }).rpc();
+        else await program.methods.respond(board[index], Array.from(cellSalt), siblings).accountsStrict({ game, player: publicKey }).rpc();
       }
       await refresh();
       await loadShotHistory();
@@ -666,7 +705,10 @@ export function GameConsole() {
     if (!program || !publicKey || !activeGameAddress) return;
     setBusy(true); setMessage("Devnet timeout resolution transaction. Confirm in your wallet.");
     try {
-      await program.methods.claimTimeout().accountsStrict({ game: new PublicKey(activeGameAddress), caller: publicKey }).rpc();
+      const game = new PublicKey(activeGameAddress);
+      const battleClock = await timedClockFor(game);
+      if (battleClock) await program.methods.claimTimeoutTimed().accountsStrict({ game, battleClock, caller: publicKey }).rpc();
+      else await program.methods.claimTimeout().accountsStrict({ game, caller: publicKey }).rpc();
       await refresh();
       setMessage("Expired action resolved on-chain. The new match phase is confirmed.");
     } catch (error) { setMessage(errorMessage(error, "Timeout transaction failed.")); }
@@ -695,7 +737,7 @@ export function GameConsole() {
     setFleet(emptyFleet());
     setHistory([]);
     setBattleState({ creator: "", opponent: "", turn: 0, pendingIndex: 255, pendingAttacker: 255, shots: [0n, 0n], hits: [0, 0], claimant: 255, auditedWinner: 255 });
-    setRole("Not assigned"); setPlayerIndex(-1); setPhase("LOBBY"); setDeadline(0); setCommitted("0 / 2"); setMyCommitted(false); setHasRecovery(false);
+    setRole("Not assigned"); setPlayerIndex(-1); setPhase("LOBBY"); setDeadline(0); setResponseDeadline(0); setCommitted("0 / 2"); setMyCommitted(false); setHasRecovery(false);
     setMessage("Ready for a fresh match with new private commitments.");
   }
 
@@ -710,12 +752,12 @@ export function GameConsole() {
         <div className="console-grid">
           <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Challenge another captain or launch a local browser opponent on Devnet.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE PVP MATCH"}</button><button className="secondary-console-action" disabled={busy} onClick={startSoloGame}>PLAY VS BROWSER BOT</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
           <div className="console-card join-card"><span className="step">02</span><h3>Join, resume or watch</h3><p>Enter a match as a captain or open its public spectator feed.</p><label htmlFor="join-address">Game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={resumeGame}>RESUME MY MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={() => void watchGame(joinAddress)}>WATCH AS SPECTATOR</button></div>
-          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={phase !== "COMMIT" || myCommitted} onClick={() => document.getElementById("fleet-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{myCommitted ? "FLEET COMMITTED" : phase === "COMMIT" ? "DEPLOY FLEET BELOW" : "AWAITING OPPONENT"}</button>{activeGameAddress && playerIndex >= 0 && players === "Opponent joined" && !["VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <button className="forfeit-button" disabled={busy} onClick={forfeitGame}>EXIT &amp; FORFEIT MATCH</button> : null}</div>
+          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>{phase === "RESPOND" && responseDeadline > 0 ? "PROOF WINDOW" : "ACTION WINDOW"} <b className={(phase === "RESPOND" && responseDeadline > 0 ? responseDeadline : deadline) <= clockNow ? "expired" : ""}>{(phase === "RESPOND" && responseDeadline > 0 ? responseDeadline : deadline) ? formatRemaining((phase === "RESPOND" && responseDeadline > 0 ? responseDeadline : deadline) - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={phase !== "COMMIT" || myCommitted} onClick={() => document.getElementById("fleet-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{myCommitted ? "FLEET COMMITTED" : phase === "COMMIT" ? "DEPLOY FLEET BELOW" : "AWAITING OPPONENT"}</button>{activeGameAddress && playerIndex >= 0 && players === "Opponent joined" && !["VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <button className="forfeit-button" disabled={busy} onClick={forfeitGame}>EXIT &amp; FORFEIT MATCH</button> : null}</div>
         </div>
       )}
       {connected && activeGameAddress && phase === "COMMIT" ? <FleetDeployment fleet={fleet} onChange={setFleet} onCommit={commitFleet} onExport={exportRecovery} onImport={importRecovery} committed={myCommitted} busy={busy} canCommit={deadline > clockNow} hasRecovery={hasRecovery} /> : null}
       {connected && activeGameAddress && playerIndex >= 0 && ["FIRE", "RESPOND"].includes(phase) ? <section className="session-control" aria-label="Seamless play authorization"><div><p className="eyebrow">MATCH SESSION</p><h3>{matchSession ? "SEAMLESS PLAY ACTIVE" : "REMOVE FIRE / PROVE POPUPS"}</h3><p>{matchSession ? `Restricted to this match · expires in ${formatRemaining(matchSession.expiresAt - clockNow)}` : "One wallet approval authorizes a local match-only key for Fire and Prove and transfers exactly 0.01 Devnet SOL to pay its network fees."}</p></div>{matchSession ? <button type="button" className="secondary-console-action" disabled={busy} onClick={revokeSeamlessPlay}>REVOKE SESSION</button> : <button type="button" disabled={busy} onClick={enableSeamlessPlay}>ENABLE · 0.01 DEVNET SOL</button>}</section> : null}
-      {activeGameAddress && ["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <BattleArena phase={phase} playerIndex={playerIndex} state={battleState} fleet={fleet} history={history} deadlineExpired={deadline > 0 && deadline <= clockNow} busy={busy} hasRecovery={hasRecovery} onFire={fireAt} onRespond={respondToShot} onClaimTimeout={claimTimeout} onAudit={auditFleet} onPlayAgain={playAgain} /> : null}
+      {activeGameAddress && ["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <BattleArena phase={phase} playerIndex={playerIndex} state={battleState} fleet={fleet} history={history} deadlineExpired={(phase === "RESPOND" && responseDeadline > 0 ? responseDeadline : deadline) <= clockNow} busy={busy} hasRecovery={hasRecovery} onFire={fireAt} onRespond={respondToShot} onClaimTimeout={claimTimeout} onAudit={auditFleet} onPlayAgain={playAgain} /> : null}
       <p className="console-message" role="status">{message}</p>
     </section>
   );

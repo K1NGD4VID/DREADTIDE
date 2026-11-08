@@ -23,7 +23,11 @@ export const DreadtideErrorCode = {
   NoOpponent: 6020,
   InvalidSessionExpiry: 6021,
   InvalidSessionDelegate: 6022,
-  SessionExpired: 6023
+  SessionExpired: 6023,
+  LegacyInstructionDisabled: 6024,
+  TimedMatchRequired: 6025,
+  InsufficientResponseWindow: 6026,
+  ResponseDeadlinePassed: 6027
 };
 
 export type DreadtideErrorName = keyof typeof DreadtideErrorCode;

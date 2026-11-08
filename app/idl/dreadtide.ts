@@ -430,6 +430,82 @@ export type Dreadtide = {
       "args": []
     },
     {
+      "name": "claimTimeoutTimed",
+      "discriminator": [
+        61,
+        69,
+        72,
+        150,
+        141,
+        104,
+        111,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battleClock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "commitBoard",
       "discriminator": [
         55,
@@ -465,6 +541,92 @@ export type Dreadtide = {
                 "kind": "account",
                 "path": "game.gameId",
                 "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "commitBoardTimed",
+      "discriminator": [
+        58,
+        137,
+        54,
+        104,
+        153,
+        232,
+        193,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battleClock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
               }
             ]
           }
@@ -700,6 +862,196 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "fireSessionTimed",
+      "discriminator": [
+        2,
+        105,
+        35,
+        190,
+        52,
+        255,
+        252,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battleClock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "matchSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "fireTimed",
+      "discriminator": [
+        164,
+        236,
+        194,
+        55,
+        247,
+        112,
+        202,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battleClock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "forfeitGame",
       "discriminator": [
         177,
@@ -742,6 +1094,87 @@ export type Dreadtide = {
         {
           "name": "player",
           "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initializeBattleClock",
+      "discriminator": [
+        117,
+        75,
+        237,
+        98,
+        10,
+        134,
+        213,
+        232
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battleClock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1028,6 +1461,242 @@ export type Dreadtide = {
       ]
     },
     {
+      "name": "respondSessionTimed",
+      "discriminator": [
+        161,
+        127,
+        236,
+        156,
+        44,
+        248,
+        253,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battleClock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "matchSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "isShip",
+          "type": "bool"
+        },
+        {
+          "name": "cellSalt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "siblings",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              6
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "respondTimed",
+      "discriminator": [
+        196,
+        50,
+        16,
+        89,
+        60,
+        45,
+        145,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "game"
+              },
+              {
+                "kind": "account",
+                "path": "game.gameId",
+                "account": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battleClock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "isShip",
+          "type": "bool"
+        },
+        {
+          "name": "cellSalt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "siblings",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              6
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "revokeSession",
       "discriminator": [
         86,
@@ -1176,6 +1845,19 @@ export type Dreadtide = {
     }
   ],
   "accounts": [
+    {
+      "name": "battleClock",
+      "discriminator": [
+        2,
+        171,
+        86,
+        115,
+        55,
+        10,
+        235,
+        57
+      ]
+    },
     {
       "name": "game",
       "discriminator": [
@@ -1442,6 +2124,26 @@ export type Dreadtide = {
       "code": 6023,
       "name": "sessionExpired",
       "msg": "Session authorization has expired"
+    },
+    {
+      "code": 6024,
+      "name": "legacyInstructionDisabled",
+      "msg": "Timed matches must use the battle-clock instructions"
+    },
+    {
+      "code": 6025,
+      "name": "timedMatchRequired",
+      "msg": "This match does not have a battle clock"
+    },
+    {
+      "code": 6026,
+      "name": "insufficientResponseWindow",
+      "msg": "Too little battle time remains for a fair response window"
+    },
+    {
+      "code": 6027,
+      "name": "responseDeadlinePassed",
+      "msg": "The defender response window has passed"
     }
   ],
   "types": [
@@ -1473,6 +2175,30 @@ export type Dreadtide = {
           {
             "name": "claimant",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "battleClock",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "battleDeadline",
+            "type": "i64"
+          },
+          {
+            "name": "responseDeadline",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }

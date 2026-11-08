@@ -424,6 +424,82 @@
       "args": []
     },
     {
+      "name": "claim_timeout_timed",
+      "discriminator": [
+        61,
+        69,
+        72,
+        150,
+        141,
+        104,
+        111,
+        84
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battle_clock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "caller",
+          "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "commit_board",
       "discriminator": [
         55,
@@ -459,6 +535,92 @@
                 "kind": "account",
                 "path": "game.game_id",
                 "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "commit_board_timed",
+      "discriminator": [
+        58,
+        137,
+        54,
+        104,
+        153,
+        232,
+        193,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battle_clock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
               }
             ]
           }
@@ -694,6 +856,196 @@
       ]
     },
     {
+      "name": "fire_session_timed",
+      "discriminator": [
+        2,
+        105,
+        35,
+        190,
+        52,
+        255,
+        252,
+        40
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battle_clock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "MatchSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "fire_timed",
+      "discriminator": [
+        164,
+        236,
+        194,
+        55,
+        247,
+        112,
+        202,
+        30
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battle_clock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "forfeit_game",
       "discriminator": [
         177,
@@ -736,6 +1088,87 @@
         {
           "name": "player",
           "signer": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_battle_clock",
+      "discriminator": [
+        117,
+        75,
+        237,
+        98,
+        10,
+        134,
+        213,
+        232
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battle_clock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
@@ -1022,6 +1455,242 @@
       ]
     },
     {
+      "name": "respond_session_timed",
+      "discriminator": [
+        161,
+        127,
+        236,
+        156,
+        44,
+        248,
+        253,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battle_clock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "session",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  101,
+                  115,
+                  115,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              },
+              {
+                "kind": "account",
+                "path": "session.player",
+                "account": "MatchSession"
+              }
+            ]
+          }
+        },
+        {
+          "name": "delegate",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "is_ship",
+          "type": "bool"
+        },
+        {
+          "name": "cell_salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "siblings",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              6
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "respond_timed",
+      "discriminator": [
+        196,
+        50,
+        16,
+        89,
+        60,
+        45,
+        145,
+        170
+      ],
+      "accounts": [
+        {
+          "name": "game",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  97,
+                  109,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game.creator",
+                "account": "Game"
+              },
+              {
+                "kind": "account",
+                "path": "game.game_id",
+                "account": "Game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "battle_clock",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  97,
+                  116,
+                  116,
+                  108,
+                  101,
+                  45,
+                  99,
+                  108,
+                  111,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "game"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "is_ship",
+          "type": "bool"
+        },
+        {
+          "name": "cell_salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "siblings",
+          "type": {
+            "array": [
+              {
+                "array": [
+                  "u8",
+                  32
+                ]
+              },
+              6
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "revoke_session",
       "discriminator": [
         86,
@@ -1170,6 +1839,19 @@
     }
   ],
   "accounts": [
+    {
+      "name": "BattleClock",
+      "discriminator": [
+        2,
+        171,
+        86,
+        115,
+        55,
+        10,
+        235,
+        57
+      ]
+    },
     {
       "name": "Game",
       "discriminator": [
@@ -1436,6 +2118,26 @@
       "code": 6023,
       "name": "SessionExpired",
       "msg": "Session authorization has expired"
+    },
+    {
+      "code": 6024,
+      "name": "LegacyInstructionDisabled",
+      "msg": "Timed matches must use the battle-clock instructions"
+    },
+    {
+      "code": 6025,
+      "name": "TimedMatchRequired",
+      "msg": "This match does not have a battle clock"
+    },
+    {
+      "code": 6026,
+      "name": "InsufficientResponseWindow",
+      "msg": "Too little battle time remains for a fair response window"
+    },
+    {
+      "code": 6027,
+      "name": "ResponseDeadlinePassed",
+      "msg": "The defender response window has passed"
     }
   ],
   "types": [
@@ -1467,6 +2169,30 @@
           {
             "name": "claimant",
             "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BattleClock",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "game",
+            "type": "pubkey"
+          },
+          {
+            "name": "battle_deadline",
+            "type": "i64"
+          },
+          {
+            "name": "response_deadline",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
           }
         ]
       }
