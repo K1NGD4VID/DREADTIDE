@@ -11,3 +11,9 @@
 - Anchor CLI is being installed directly in WSL at version 1.2.2. `Anchor.toml` omits `toolchain.anchor_version` because that setting requires AVM.
 - The local platform-tools v1.57 download timed out. GitHub Actions will build the same source with the official Solana CLI and upload the small SBF binary for local validator testing. This does not deploy or sign any transaction.
 - The complete-match validator test reached claimant audit but pure Rust SHA-256 exceeded the 1,400,000 CU transaction ceiling. Use `solana-sha256-hasher` for the same byte-compatible hashes; its Solana target calls the runtime SHA-256 syscall. Shared golden vectors continue to guard parity.
+
+## 2026-11-08
+
+- Fleet placement preserves the canonical ship order `[4,3,3,2]` used by both Merkle occupancy and the on-chain claimant audit. Ships may touch because the deployed program permits touching; overlap and out-of-bounds placement are rejected.
+- Private fleet recovery uses a versioned local JSON record keyed by match and wallet. It contains placements, the 32-byte seed, and commitment root, and import recomputes the root before accepting the record. It never contains a wallet key.
+- The deployed program currently uses a 900-second action window. The UI exposes that actual behavior; changing back to 120 seconds requires an explicit program timing decision.

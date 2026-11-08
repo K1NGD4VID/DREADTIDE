@@ -1,6 +1,6 @@
 # Progress
 
-Updated 2026-11-07.
+Updated 2026-11-08.
 
 | Milestone | Status | Evidence |
 |---|---|---|
@@ -11,5 +11,12 @@ Updated 2026-11-07.
 | M5: bot, spectator evidence, recovery | Not started | — |
 | M6: scoped session signing | Not started | — |
 | M7/M8: test-token escrow and badge | Deferred | Optional |
+
+## Gameplay implementation milestones
+
+| Milestone | Status | Evidence |
+|---|---|---|
+| Interactive fleet deployment | Complete | Four canonical ships can be selected, placed, rotated, moved, removed, randomized, reset, committed, exported, and restored. Fleet placement tests: 3 passed; crypto vectors: 3 passed; TypeScript and production build passed. |
+| Browser PvP battle arena | Next | Fire/respond controls, proof response flow, board outcomes, and battle history remain to be implemented. |
 
 An Anchor program source and generated IDL are present. CI runs `42388975297` and `42390006749` built SBF binaries and passed the complete-match validator test after the SHA-256 syscall change, including without a custom compute budget. The program is deployed on Devnet: signature `4CRrke2ARXGZq4vCT5z3SacHUU6h1jdzVA3ZM7UAPx98rWcurB3p8MWv7RuLB3BAjBvLwrmPvtEkeNwFBHCLhYwZ`, slot `519718504`. A live Devnet match passed in 117 seconds and finalized its claimant audit at 37,026 CU. The two-wallet browser gameplay flow remains. Platform-tools v1.57 is a 531 MB archive; the local installer timed out and a direct download ran at roughly 7–20 KB/s. The test vectors are deterministic fixtures, not live game evidence.

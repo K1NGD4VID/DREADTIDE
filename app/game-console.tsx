@@ -7,15 +7,20 @@ import { PublicKey, SystemProgram } from "@solana/web3.js";
 import idl from "./idl/dreadtide.json";
 import type { Dreadtide } from "./idl/dreadtide";
 import { occupancy, tree } from "./lib/crypto/merkle";
+import { FleetDeployment } from "./fleet-deployment";
+import { emptyFleet, validateFleet, type FleetPlacement } from "./lib/game/fleet";
 
 const PROGRAM_ID = new PublicKey(idl.address);
 const EMPTY_KEY = new PublicKey(new Uint8Array(32));
-const fleet = [
-  { x: 0, y: 0, vertical: false },
-  { x: 2, y: 2, vertical: true },
-  { x: 4, y: 4, vertical: false },
-  { x: 7, y: 6, vertical: true },
-] as const;
+type FleetSecret = {
+  schemaVersion: 1;
+  matchAddress: string;
+  playerAddress: string;
+  gameId: string;
+  placements: Array<{ x: number; y: number; vertical: boolean }>;
+  seed: number[];
+  root: number[];
+};
 
 function bytesFromSeed(): Uint8Array {
   const seed = new Uint8Array(32);
@@ -24,6 +29,16 @@ function bytesFromSeed(): Uint8Array {
 }
 
 function short(value: string): string { return `${value.slice(0, 6)}...${value.slice(-6)}`; }
+function secretKey(match: string, player: string): string { return `dreadtide-fleet:v1:${match}:${player}`; }
+
+function parseSecret(value: string): FleetSecret {
+  const parsed = JSON.parse(value) as Partial<FleetSecret>;
+  if (parsed.schemaVersion !== 1 || typeof parsed.matchAddress !== "string" || typeof parsed.playerAddress !== "string" || typeof parsed.gameId !== "string" || !Array.isArray(parsed.placements) || !Array.isArray(parsed.seed) || !Array.isArray(parsed.root)) throw new Error("This is not a DREADTIDE recovery file.");
+  if (parsed.placements.length !== 4 || parsed.seed.length !== 32 || parsed.root.length !== 32 || parsed.seed.some((value) => !Number.isInteger(value) || value < 0 || value > 255) || parsed.root.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) throw new Error("The recovery file has invalid fleet data.");
+  const placements = parsed.placements.map((ship) => ({ x: Number(ship.x), y: Number(ship.y), vertical: Boolean(ship.vertical), placed: true }));
+  if (!validateFleet(placements).valid) throw new Error("The recovery file contains an invalid fleet.");
+  return parsed as FleetSecret;
+}
 
 function uniqueGameId(): bigint {
   const random = new Uint32Array(1);
@@ -71,6 +86,8 @@ export function GameConsole() {
   const [deadline, setDeadline] = useState(0);
   const [clockNow, setClockNow] = useState(() => Math.floor(Date.now() / 1000));
   const [busy, setBusy] = useState(false);
+  const [fleet, setFleet] = useState<FleetPlacement[]>(() => emptyFleet());
+  const [hasRecovery, setHasRecovery] = useState(false);
   const [message, setMessage] = useState("Connect a wallet to create or join a match.");
 
   const wallet = useMemo<any>(() => {
@@ -112,6 +129,29 @@ export function GameConsole() {
     setCommitted("0 / 2");
     setMyCommitted(false);
   }, [walletAddress]);
+  useEffect(() => {
+    if (!walletAddress || !activeGameAddress) {
+      setFleet(emptyFleet());
+      setHasRecovery(false);
+      return;
+    }
+    const stored = localStorage.getItem(secretKey(activeGameAddress, walletAddress));
+    if (!stored) {
+      setFleet(emptyFleet());
+      setHasRecovery(false);
+      return;
+    }
+    try {
+      const record = parseSecret(stored);
+      if (record.matchAddress !== activeGameAddress || record.playerAddress !== walletAddress) throw new Error("Recovery record does not match this wallet and match.");
+      setFleet(record.placements.map((ship) => ({ ...ship, placed: true })));
+      setHasRecovery(true);
+    } catch {
+      setFleet(emptyFleet());
+      setHasRecovery(false);
+      setMessage("Stored fleet recovery data is invalid. Import a valid private recovery file.");
+    }
+  }, [activeGameAddress, walletAddress]);
   useEffect(() => {
     if (!connected || !activeGameAddress) return;
     void refresh();
@@ -208,15 +248,50 @@ export function GameConsole() {
       if (phaseName(state.phase) !== "commit") throw new Error("WrongPhase");
       if (state.committed[playerIndex]) throw new Error("AlreadyCommitted");
       if (Math.floor(Date.now() / 1000) > Number(state.deadline.toString())) throw new Error("DeadlinePassed");
-      const stored = localStorage.getItem(`dreadtide-seed:${activeGameAddress}:${publicKey.toBase58()}`);
-      const seed = stored ? Uint8Array.from(JSON.parse(stored) as number[]) : bytesFromSeed();
-      localStorage.setItem(`dreadtide-seed:${activeGameAddress}:${publicKey.toBase58()}`, JSON.stringify(Array.from(seed)));
+      if (!validateFleet(fleet).valid) throw new Error("Place a valid fleet before committing.");
+      const existing = localStorage.getItem(secretKey(activeGameAddress, publicKey.toBase58()));
+      const seed = existing ? Uint8Array.from(parseSecret(existing).seed) : bytesFromSeed();
       const levels = await tree(BigInt(state.gameId.toString()), publicKey.toBytes(), seed, occupancy(fleet));
-      await program.methods.commitBoard(Array.from(levels[6][0])).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
+      const root = Array.from(levels[6][0]);
+      const record: FleetSecret = { schemaVersion: 1, matchAddress: activeGameAddress, playerAddress: publicKey.toBase58(), gameId: state.gameId.toString(), placements: fleet.map(({ x, y, vertical }) => ({ x, y, vertical })), seed: Array.from(seed), root };
+      localStorage.setItem(secretKey(activeGameAddress, publicKey.toBase58()), JSON.stringify(record));
+      setHasRecovery(true);
+      await program.methods.commitBoard(root).accountsStrict({ game: new PublicKey(activeGameAddress), player: publicKey }).rpc();
       await refresh();
       setMessage("Fleet committed. Your board remains hidden until an audit.");
     } catch (error) { setMessage(errorMessage(error, "Commit transaction failed.")); }
     finally { setBusy(false); }
+  }
+
+  function exportRecovery() {
+    if (!publicKey || !activeGameAddress) return;
+    const stored = localStorage.getItem(secretKey(activeGameAddress, publicKey.toBase58()));
+    if (!stored) return;
+    const blob = new Blob([stored], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `dreadtide-recovery-${short(activeGameAddress).replace("...", "-")}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setMessage("Private recovery file exported. Store it securely and do not share it.");
+  }
+
+  async function importRecovery(file: File) {
+    if (!publicKey || !activeGameAddress) return;
+    try {
+      const record = parseSecret(await file.text());
+      if (record.matchAddress !== activeGameAddress || record.playerAddress !== publicKey.toBase58() || record.gameId !== gameId) throw new Error("This recovery file belongs to a different match, wallet, or game ID.");
+      const restored = record.placements.map((ship) => ({ ...ship, placed: true }));
+      const levels = await tree(BigInt(record.gameId), publicKey.toBytes(), Uint8Array.from(record.seed), occupancy(restored));
+      if (!levels[6][0].every((value, index) => value === record.root[index])) throw new Error("Recovery verification failed: commitment root mismatch.");
+      localStorage.setItem(secretKey(activeGameAddress, publicKey.toBase58()), JSON.stringify(record));
+      setFleet(restored);
+      setHasRecovery(true);
+      setMessage("Private fleet recovery verified and restored.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not import that recovery file.");
+    }
   }
 
   return (
@@ -229,9 +304,10 @@ export function GameConsole() {
         <div className="console-grid">
           <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Generate a fresh game account with a 15 minute invitation window.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE FRESH MATCH"}</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
           <div className="console-card join-card"><span className="step">02</span><h3>Join a match</h3><p>Use an address from another captain. Your own match cannot be joined by the same wallet.</p><label htmlFor="join-address">Opponent's game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button></div>
-          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={busy || !activeGameAddress || phase !== "COMMIT" || deadline <= clockNow || myCommitted} onClick={commitFleet}>{myCommitted ? "FLEET COMMITTED" : "COMMIT HIDDEN FLEET"}</button></div>
+          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={phase !== "COMMIT" || myCommitted} onClick={() => document.getElementById("fleet-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{myCommitted ? "FLEET COMMITTED" : phase === "COMMIT" ? "DEPLOY FLEET BELOW" : "AWAITING OPPONENT"}</button></div>
         </div>
       )}
+      {connected && activeGameAddress && phase === "COMMIT" ? <FleetDeployment fleet={fleet} onChange={setFleet} onCommit={commitFleet} onExport={exportRecovery} onImport={importRecovery} committed={myCommitted} busy={busy} canCommit={deadline > clockNow} hasRecovery={hasRecovery} /> : null}
       <p className="console-message" role="status">{message}</p>
     </section>
   );

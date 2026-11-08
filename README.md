@@ -1,6 +1,6 @@
 # DREADTIDE
 
-DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players commit hidden fleets, answer shots with Merkle proofs, and audit the claimant's own board before a verified victory. The Anchor program has passed a complete-match local validator test and is deployed on Devnet. A live match and playable UI are next.
+DREADTIDE is an in-progress two-player naval strategy game for Solana Devnet. Players create or join a match, arrange a private four-ship fleet on an interactive 8×8 board, commit its Merkle root, and preserve the secret through local recovery export/import. The Anchor program has passed complete-match local and Devnet tests and is deployed on Devnet. Browser combat is the next implementation milestone.
 
 ## Crypto gate
 
@@ -9,6 +9,7 @@ The fixed grid is 8×8 with four straight ships of lengths `[4,3,3,2]`. `fixture
 ```sh
 npm install
 npm run test:crypto
+npx vitest run tests/fleet-placement.spec.ts
 npm run typecheck
 cargo test --workspace --target-dir target-windows
 ```
@@ -25,11 +26,15 @@ The integration test in `tests/game.integration.spec.ts` requires a validator on
 
 After deployment, copy `.env.example` to the ignored `.env` file and set `DREADTIDE_RPC_URL` and `DREADTIDE_FEE_PAYER_KEYPAIR`. Run `npm run test:devnet` from a trusted machine with a funded Devnet fee payer. The test sends real Devnet transactions, creates a fresh game account, and prints its address and the verified audit signature for Solana Explorer. Keep the keypair file and `.env` private.
 
+## Browser gameplay
+
+The current UI supports Phantom and Solflare, match creation and joining, live phase/deadline polling, interactive fleet placement, randomized valid fleets, commitment, and private recovery files. Recovery files contain the fleet seed and must be kept private. The complete fire/respond/audit battle arena is still under construction.
+
 ## Current limits
 
 - The [Devnet program](https://explorer.solana.com/address/BNFQudgxvwLNZNhj1aSTVXqzXpBn68jifArJ5xRCGUE4?cluster=devnet) is deployed; [deployment transaction](https://explorer.solana.com/tx/4CRrke2ARXGZq4vCT5z3SacHUU6h1jdzVA3ZM7UAPx98rWcurB3p8MWv7RuLB3BAjBvLwrmPvtEkeNwFBHCLhYwZ?cluster=devnet).
 - A [complete Devnet match](https://explorer.solana.com/address/GLwivaP85C8bfVVpUC1PajnaVHNj1Xdn8anUDAdDz1f9?cluster=devnet) passed; its [claimant audit transaction](https://explorer.solana.com/tx/4pkJGNKMSVBzw6EVqJake9PhaiYQwg2A9tnt9qP45zHVDJvtmJ5ZurH5fsWHtPZfiGretNa8crres2mbHVkqDqaD?cluster=devnet) finalized at 37,026 CU.
-- No wallet, bot, spectator, session, or escrow implementation yet.
+- Wallet and fleet commitment are implemented. Fire/respond gameplay, bot, spectator evidence, session authorization, and escrow remain.
 - A Merkle root fixes cell responses, but it does not prove the committed board contains a legal fleet. The planned claimant-only audit is required before any verified victory.
 
 See [PROGRESS.md](PROGRESS.md) for gates and [DECISIONS.md](DECISIONS.md) for implementation decisions. The project specifications are in `docs/`.
