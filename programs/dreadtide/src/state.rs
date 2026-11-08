@@ -5,6 +5,7 @@ use anchor_lang::prelude::*;
 // address, switch accounts or devices, approve, and confirm on Devnet.
 pub const ACTION_SECONDS: i64 = 900;
 pub const AUDIT_SECONDS: i64 = 300;
+pub const BATTLE_SECONDS: i64 = 300;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Phase {
@@ -104,9 +105,6 @@ impl Game {
         self.pending_index = index;
         self.pending_attacker = attacker;
         self.phase = Phase::Respond;
-        self.deadline = now
-            .checked_add(ACTION_SECONDS)
-            .ok_or(DreadtideError::ClockOverflow)?;
         Ok(())
     }
 
@@ -152,9 +150,6 @@ impl Game {
         } else {
             self.phase = Phase::Fire;
             self.turn = defender;
-            self.deadline = now
-                .checked_add(ACTION_SECONDS)
-                .ok_or(DreadtideError::ClockOverflow)?;
         }
         Ok(ShotResult {
             attacker,
@@ -173,8 +168,17 @@ impl Game {
                 [false, true] => self.enter_audit(1, now)?,
                 _ => self.phase = Phase::NoVerifiedWinner,
             },
-            Phase::Fire => self.enter_audit(1 - self.turn, now)?,
-            Phase::Respond => self.enter_audit(self.pending_attacker, now)?,
+            Phase::Fire | Phase::Respond => {
+                // Hits are stored against each defender, so hits[1] is damage
+                // dealt by the creator and hits[0] is damage dealt by opponent.
+                if self.hits[1] > self.hits[0] {
+                    self.enter_audit(0, now)?;
+                } else if self.hits[0] > self.hits[1] {
+                    self.enter_audit(1, now)?;
+                } else {
+                    self.phase = Phase::NoVerifiedWinner;
+                }
+            }
             Phase::Audit => self.fail_audit(now)?,
             _ => return err!(DreadtideError::WrongPhase),
         }

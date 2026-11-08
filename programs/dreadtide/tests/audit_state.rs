@@ -187,6 +187,7 @@ fn procedural_timeout_still_requires_beneficiary_audit() {
     let (mut game, _, seed1, _) = committed_game();
     let opponent = game.opponent;
     game.turn = 0;
+    game.hits = [3, 1]; // opponent dealt three hits; creator dealt one
     assert!(game.claim_timeout(120).is_err());
     game.claim_timeout(121).unwrap();
     assert_eq!(game.phase, Phase::Audit);
@@ -194,4 +195,13 @@ fn procedural_timeout_still_requires_beneficiary_audit() {
     assert_eq!(game.audited_winner, u8::MAX);
     assert!(game.audit_board(&opponent, &seed1, &ships(), 122).unwrap());
     assert_eq!(game.audited_winner, 1);
+}
+
+#[test]
+fn tied_battle_at_five_minutes_has_no_winner() {
+    let (mut game, _, _, _) = committed_game();
+    game.hits = [4, 4];
+    game.claim_timeout(121).unwrap();
+    assert_eq!(game.phase, Phase::NoVerifiedWinner);
+    assert_eq!(game.audited_winner, u8::MAX);
 }
