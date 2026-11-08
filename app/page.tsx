@@ -16,9 +16,8 @@ export default function Home() {
     <main>
       <nav className="nav-shell" aria-label="Primary navigation">
         <a className="brand" href="#top" aria-label="DREADTIDE home">
-          <img src="/dreadtide-logo.png" alt="DREADTIDE" />
+          <img src="/wordmark.svg" alt="DREADTIDE" />
         </a>
-        <div className="network"><i /> SOLANA DEVNET</div>
         <WalletMultiButton className="wallet-button" />
       </nav>
 
@@ -37,8 +36,8 @@ export default function Home() {
 
         <div className="sonar-stage" aria-label="Eight by eight naval grid preview">
           <div className="sweep" />
-          <div className="coordinates top">A B C D E F G H</div>
-          <div className="coordinates side">1<br />2<br />3<br />4<br />5<br />6<br />7<br />8</div>
+          <div className="coordinates top" aria-hidden="true">{"ABCDEFGH".split("").map((label) => <span key={label}>{label}</span>)}</div>
+          <div className="coordinates side" aria-hidden="true">{Array.from({ length: 8 }, (_, index) => <span key={index}>{index + 1}</span>)}</div>
           <div className="grid-board">
             {cells.map((cell) => <span key={cell} className={[10, 18, 26, 27, 28, 44, 45, 46, 52, 53, 54, 55].includes(cell) ? "occupied" : ""} />)}
           </div>
