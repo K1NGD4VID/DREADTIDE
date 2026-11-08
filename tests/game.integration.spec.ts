@@ -74,7 +74,7 @@ describe("local validator match", () => {
       SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: creatorDelegate.publicKey, lamports: Math.round(.005 * LAMPORTS_PER_SOL) }),
       SystemProgram.transfer({ fromPubkey: creator.publicKey, toPubkey: opponentDelegate.publicKey, lamports: Math.round(.005 * LAMPORTS_PER_SOL) }),
     ));
-    const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+    const expiresAt = Math.floor(Date.now() / 1000) + 3300;
     await program.methods.authorizeSession(creatorDelegate.publicKey, new BN(expiresAt)).accountsStrict({ game: gamePda, session: creatorSession, player: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
     await program.methods.authorizeSession(opponentDelegate.publicKey, new BN(expiresAt)).accountsStrict({ game: gamePda, session: opponentSession, player: opponent.publicKey, systemProgram: SystemProgram.programId }).signers([opponent]).rpc();
 

@@ -573,7 +573,8 @@ export function GameConsole() {
     setBusy(true);
     setMessage("Approve once: authorize a match-only Fire/Prove key and fund it with exactly 0.01 Devnet SOL for fees.");
     try {
-      const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+      // Leave five minutes of headroom for browser/RPC clock skew under the on-chain one-hour cap.
+      const expiresAt = Math.floor(Date.now() / 1000) + 3300;
       const record = createSessionRecord(activeGameAddress, publicKey.toBase58(), expiresAt);
       const delegate = restoreSession(record);
       const authorize = await program.methods.authorizeSession(delegate.publicKey, new BN(expiresAt)).accountsStrict({ game: new PublicKey(activeGameAddress), session: sessionAddress, player: publicKey, systemProgram: SystemProgram.programId }).instruction();
