@@ -65,9 +65,15 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(58px, 6.5vw, 82px); line-heig
 .live-badge i { display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--muted); margin-right:8px; }
 .live-badge.online { color:var(--signal); }
 .live-badge.online i { background:var(--signal); box-shadow:0 0 12px var(--signal); }
-.console-empty { border-top:1px solid var(--line); padding-top:32px; }
+.console-empty { border-top:1px solid var(--line); padding-top:32px; display:grid; grid-template-columns:1fr minmax(320px,.8fr); gap:32px; align-items:end; }
 .console-empty h3 { margin:0 0 12px; font-size:28px; text-transform:uppercase; }
 .console-empty p, .console-card p { color:var(--muted); line-height:1.6; }
+.spectator-entry { display:grid; grid-template-columns:1fr auto; gap:10px; }
+.spectator-entry label { grid-column:1/-1; color:var(--signal); font:700 10px/1 monospace; letter-spacing:.1em; }
+.spectator-entry input { min-width:0; border:1px solid var(--line); background:#020817; color:var(--ink); padding:14px; font:600 12px/1 monospace; }
+.spectator-entry button { border:1px solid var(--signal); background:var(--signal); color:#001019; padding:0 22px; font:800 10px/1 monospace; letter-spacing:.08em; cursor:pointer; }
+.spectator-entry button:disabled { opacity:.4; cursor:not-allowed; }
+.connect-note { grid-column:1/-1; margin:0; font:700 10px/1.5 monospace; letter-spacing:.06em; }
 .console-grid { display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line); }
 .console-card { min-height:300px; padding:28px 28px 24px 0; border-right:1px solid var(--line); margin-right:28px; display:flex; flex-direction:column; }
 .console-card:last-child { border-right:0; margin-right:0; padding-right:0; }
@@ -137,6 +143,7 @@ h1 { max-width: 760px; margin: 0; font-size: clamp(58px, 6.5vw, 82px); line-heig
 .board-title span { color:var(--signal); font:700 9px/1 monospace; letter-spacing:.1em; }
 .battle-board { aspect-ratio:1; display:grid; grid-template-columns:repeat(8,1fr); border-top:1px solid rgb(8 200 218 / .3); border-left:1px solid rgb(8 200 218 / .3); background:#020817; }
 .battle-board button { position:relative; min-width:0; padding:0; border:0; border-right:1px solid rgb(8 200 218 / .22); border-bottom:1px solid rgb(8 200 218 / .22); background:rgb(8 200 218 / .02); color:var(--muted); cursor:crosshair; }
+.spectator-mode .battle-board button { cursor:default; }
 .battle-board button:not(:disabled):hover, .battle-board button:not(:disabled):focus-visible { outline:2px solid var(--signal); outline-offset:-2px; background:rgb(8 200 218 / .18); z-index:1; }
 .battle-board button small { position:absolute; left:4px; top:4px; font:700 7px/1 monospace; opacity:.58; }
 .battle-board button b { font:900 9px/1 monospace; letter-spacing:.04em; }
@@ -188,6 +195,9 @@ footer a { color: var(--signal); text-decoration: none; }
   .mission-panel { margin: 0 16px 90px; padding: 28px 22px; grid-template-columns: 1fr; gap: 42px; }
   .game-console { margin:0 16px 80px; padding:28px 22px; }
   .console-heading { flex-direction:column; }
+  .console-empty { grid-template-columns:1fr; }
+  .spectator-entry { grid-template-columns:1fr; }
+  .spectator-entry label { grid-column:auto; }
   .console-grid { grid-template-columns:1fr; }
   .console-card,.console-card:last-child { min-height:0; margin:0; padding:28px 0; border-right:0; border-bottom:1px solid var(--line); }
   .console-card:last-child { border-bottom:0; }

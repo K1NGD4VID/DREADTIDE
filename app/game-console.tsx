@@ -84,6 +84,7 @@ export function GameConsole() {
   const [gameId, setGameId] = useState("Generated on create");
   const [activeGameAddress, setActiveGameAddress] = useState("");
   const [joinAddress, setJoinAddress] = useState("");
+  const [watchAddress, setWatchAddress] = useState("");
   const [role, setRole] = useState("Not assigned");
   const [phase, setPhase] = useState("LOBBY");
   const [players, setPlayers] = useState("Waiting for opponent");
@@ -104,13 +105,11 @@ export function GameConsole() {
     return { publicKey, signTransaction, signAllTransactions };
   }, [publicKey, signAllTransactions, signTransaction]);
 
-  const program = useMemo(() => {
-    if (!wallet) return null;
-    return new Program<Dreadtide>(idl as Dreadtide, new AnchorProvider(connection, wallet, { commitment: "confirmed" }));
-  }, [connection, wallet]);
+  const readonlyWallet = useMemo<any>(() => ({ publicKey: EMPTY_KEY, signTransaction: async () => { throw new Error("Connect a wallet to sign transactions."); }, signAllTransactions: async () => { throw new Error("Connect a wallet to sign transactions."); } }), []);
+  const program = useMemo(() => new Program<Dreadtide>(idl as Dreadtide, new AnchorProvider(connection, wallet ?? readonlyWallet, { commitment: "confirmed" })), [connection, readonlyWallet, wallet]);
 
   const refresh = useCallback(async (address = activeGameAddress) => {
-    if (!program || !address) return;
+    if (!address) return;
     try {
       const state = await program.account.game.fetch(new PublicKey(address)) as any;
       const nextPhase = phaseName(state.phase);
@@ -145,7 +144,7 @@ export function GameConsole() {
   }, [walletAddress]);
 
   const loadShotHistory = useCallback(async (address = activeGameAddress) => {
-    if (!program || !address) return;
+    if (!address) return;
     try {
       const game = new PublicKey(address);
       const signatures = await connection.getSignaturesForAddress(game, { limit: 100 }, "confirmed");
@@ -192,15 +191,15 @@ export function GameConsole() {
     }
   }, [activeGameAddress, walletAddress]);
   useEffect(() => {
-    if (!connected || !activeGameAddress) return;
+    if (!activeGameAddress) return;
     void refresh();
     const timer = window.setInterval(() => void refresh(), 5_000);
     return () => window.clearInterval(timer);
-  }, [connected, activeGameAddress, refresh]);
+  }, [activeGameAddress, refresh]);
   useEffect(() => {
-    if (!connected || !activeGameAddress || !["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER"].includes(phase)) return;
+    if (!activeGameAddress || !["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER"].includes(phase)) return;
     void loadShotHistory();
-  }, [activeGameAddress, battleState.shots, connected, loadShotHistory, phase]);
+  }, [activeGameAddress, battleState.shots, loadShotHistory, phase]);
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(timer);
@@ -283,6 +282,22 @@ export function GameConsole() {
       await refresh(address.toBase58());
       setMessage("Existing match restored. Import your private fleet recovery if this browser does not have it.");
     } catch (error) { setMessage(errorMessage(error, "Could not resume that match.")); }
+    finally { setBusy(false); }
+  }
+
+  async function watchGame() {
+    if (!watchAddress) return;
+    setBusy(true); setMessage("Loading public match state from Solana Devnet...");
+    try {
+      const address = new PublicKey(watchAddress);
+      await program.account.game.fetch(address);
+      setActiveGameAddress(address.toBase58());
+      setRole("Spectator");
+      setPlayerIndex(-1);
+      await refresh(address.toBase58());
+      await loadShotHistory(address.toBase58());
+      setMessage("Spectator feed live. Public match state refreshes every five seconds.");
+    } catch (error) { setMessage(errorMessage(error, "Could not watch that match.")); }
     finally { setBusy(false); }
   }
 
@@ -445,7 +460,7 @@ export function GameConsole() {
         <div><p className="eyebrow">MATCH OPERATIONS</p><h2 id="game-console-title">Enter the war room.</h2></div>
         <span className={`live-badge ${connected ? "online" : ""}`}><i /> {connected ? "WALLET READY" : "WALLET OFFLINE"}</span>
       </div>
-      {!connected ? <div className="console-empty"><h3>Your fleet is waiting.</h3><p>Connect Phantom or Solflare above to create a Devnet match, join an opponent, and commit your hidden board.</p></div> : (
+      {!connected ? <div className="console-empty"><div><h3>Watch the battle live.</h3><p>Paste any DREADTIDE match address to follow its public on-chain state. No wallet is required.</p></div><div className="spectator-entry"><label htmlFor="watch-address">MATCH ADDRESS</label><input id="watch-address" value={watchAddress} onChange={(event) => setWatchAddress(event.target.value.trim())} placeholder="Paste a Devnet game account" /><button disabled={busy || !watchAddress} onClick={watchGame}>{busy ? "LOADING..." : "WATCH MATCH"}</button></div><p className="connect-note">Connect Phantom or Solflare to command a fleet.</p></div> : (
         <div className="console-grid">
           <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Generate a fresh game account with a 15 minute invitation window.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE FRESH MATCH"}</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
           <div className="console-card join-card"><span className="step">02</span><h3>Join or resume</h3><p>Join a new opponent match, or restore a match already owned by this wallet.</p><label htmlFor="join-address">Game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={resumeGame}>RESUME MY MATCH</button></div>
@@ -453,7 +468,7 @@ export function GameConsole() {
         </div>
       )}
       {connected && activeGameAddress && phase === "COMMIT" ? <FleetDeployment fleet={fleet} onChange={setFleet} onCommit={commitFleet} onExport={exportRecovery} onImport={importRecovery} committed={myCommitted} busy={busy} canCommit={deadline > clockNow} hasRecovery={hasRecovery} /> : null}
-      {connected && activeGameAddress && ["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <BattleArena phase={phase} playerIndex={playerIndex} state={battleState} fleet={fleet} history={history} deadlineExpired={deadline > 0 && deadline <= clockNow} busy={busy} hasRecovery={hasRecovery} onFire={fireAt} onRespond={respondToShot} onClaimTimeout={claimTimeout} onAudit={auditFleet} onPlayAgain={playAgain} /> : null}
+      {activeGameAddress && ["FIRE", "RESPOND", "AUDIT", "VERIFIED FINISHED", "NO VERIFIED WINNER", "CANCELLED"].includes(phase) ? <BattleArena phase={phase} playerIndex={playerIndex} state={battleState} fleet={fleet} history={history} deadlineExpired={deadline > 0 && deadline <= clockNow} busy={busy} hasRecovery={hasRecovery} onFire={fireAt} onRespond={respondToShot} onClaimTimeout={claimTimeout} onAudit={auditFleet} onPlayAgain={playAgain} /> : null}
       <p className="console-message" role="status">{message}</p>
     </section>
   );
