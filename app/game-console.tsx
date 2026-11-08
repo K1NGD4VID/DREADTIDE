@@ -13,6 +13,7 @@ import { botProgram, botStorageKey, chooseBotTarget, createBotRecord, restoreBot
 import { BattleArena, type BattleState } from "./battle-arena";
 import type { ShotOutcome } from "./lib/game/battle";
 import { createSessionRecord, readSession, restoreSession, sessionStorageKey, type MatchSessionRecord } from "./lib/game/match-session";
+import { MatchTransitionOverlay, type MatchTransition } from "./match-transition-overlay";
 
 const PROGRAM_ID = new PublicKey(idl.address);
 const EMPTY_KEY = new PublicKey(new Uint8Array(32));
@@ -114,8 +115,12 @@ export function GameConsole() {
   const [stakeAmount, setStakeAmount] = useState(50);
   const [purchaseAmount, setPurchaseAmount] = useState(50);
   const [matchSession, setMatchSession] = useState<MatchSessionRecord | null>(null);
+  const [chainStake, setChainStake] = useState<{ amount: number; creatorDeposited: boolean; opponentDeposited: boolean; settled: boolean } | null>(null);
+  const [matchTransition, setMatchTransition] = useState<MatchTransition | null>(null);
   const botBusy = useRef(false);
   const settlementBusy = useRef(false);
+  const observedPhase = useRef<string | null>(null);
+  const observedSettlement = useRef(false);
 
   const wallet = useMemo<any>(() => {
     if (!publicKey || !signTransaction || !signAllTransactions) return null;
@@ -161,6 +166,10 @@ export function GameConsole() {
       else if (index === 1) setRole("Opponent");
       else setRole("Spectator");
       setBattleState({ creator: state.creator.toBase58(), opponent: state.opponent.toBase58(), turn: state.turn, pendingIndex: state.pendingIndex, pendingAttacker: state.pendingAttacker, shots: [BigInt(state.shots[0].toString()), BigInt(state.shots[1].toString())], hits: [state.hits[0], state.hits[1]], claimant: state.claimant, auditedWinner: state.auditedWinner });
+      try {
+        const stake = await program.account.matchStake.fetch(PublicKey.findProgramAddressSync([Buffer.from("stake"), new PublicKey(address).toBuffer()], PROGRAM_ID)[0]) as any;
+        setChainStake({ amount: Number(stake.amountPerPlayer.toString()), creatorDeposited: stake.creatorDeposited, opponentDeposited: stake.opponentDeposited, settled: stake.settled });
+      } catch { setChainStake(null); }
     } catch {
       setMessage("Could not read that game account. Check the address and Devnet network.");
     }
@@ -181,6 +190,12 @@ export function GameConsole() {
   }, [walletAddress]);
   useEffect(() => { void refreshEconomy(); }, [refreshEconomy]);
   useEffect(() => {
+    observedPhase.current = null;
+    observedSettlement.current = false;
+    setChainStake(null);
+    setMatchTransition(null);
+  }, [activeGameAddress]);
+  useEffect(() => {
     if (!publicKey || !activeGameAddress) { setMatchSession(null); return; }
     setMatchSession(readSession(activeGameAddress, publicKey.toBase58()));
   }, [activeGameAddress, publicKey]);
@@ -189,6 +204,33 @@ export function GameConsole() {
     localStorage.removeItem(sessionStorageKey(matchSession.matchAddress, matchSession.playerAddress));
     setMatchSession(null);
   }, [clockNow, matchSession]);
+  useEffect(() => {
+    if (!activeGameAddress || playerIndex < 0 || !chainStake) return;
+    const previousPhase = observedPhase.current;
+    const becameSettled = !observedSettlement.current && chainStake.settled;
+    observedPhase.current = phase;
+    observedSettlement.current = chainStake.settled;
+    // Resuming an already-running match must never replay the commencement
+    // sequence and block the captain from acting.
+    if (previousPhase === null) return;
+    const showOnce = (name: string, value: MatchTransition) => {
+      const key = `dreadtide-transition:v1:${activeGameAddress}:${walletAddress}:${name}`;
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "shown");
+      setMatchTransition(value);
+    };
+    const pot = chainStake.amount * 2;
+    if (previousPhase === "LOBBY" && phase === "COMMIT" && chainStake.creatorDeposited && chainStake.opponentDeposited) {
+      showOnce("accepted", { kind: "accepted", stake: chainStake.amount, pot, creator: battleState.creator, opponent: battleState.opponent });
+    } else if (previousPhase === "COMMIT" && phase === "FIRE" && chainStake.creatorDeposited && chainStake.opponentDeposited) {
+      showOnce("engage", { kind: "engage", pot });
+    } else if (becameSettled && phase === "VERIFIED FINISHED") {
+      const winner = battleState.auditedWinner === 0 ? battleState.creator : battleState.opponent;
+      showOnce("result", { kind: battleState.auditedWinner === playerIndex ? "victory" : "defeat", stake: chainStake.amount, pot, balance: dBalance, winner });
+    } else if (becameSettled && ["NO VERIFIED WINNER", "CANCELLED"].includes(phase)) {
+      showOnce("result", { kind: "draw", stake: chainStake.amount, pot, balance: dBalance });
+    }
+  }, [activeGameAddress, battleState.auditedWinner, battleState.creator, battleState.opponent, chainStake, dBalance, phase, playerIndex, walletAddress]);
 
   const loadShotHistory = useCallback(async (address = activeGameAddress) => {
     if (!address) return;
@@ -743,6 +785,7 @@ export function GameConsole() {
 
   return (
     <section className="game-console" aria-labelledby="game-console-title">
+      {matchTransition ? <MatchTransitionOverlay transition={matchTransition} onDismiss={() => setMatchTransition(null)} /> : null}
       <div className="console-heading">
         <div><p className="eyebrow">MATCH OPERATIONS</p><h2 id="game-console-title">Enter the war room.</h2></div>
         <span className={`live-badge ${connected ? "online" : ""}`}><i /> {connected ? "WALLET READY" : "WALLET OFFLINE"}</span>
