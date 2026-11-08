@@ -271,6 +271,21 @@ export function GameConsole() {
     finally { setBusy(false); }
   }
 
+  async function resumeGame() {
+    if (!program || !publicKey || !joinAddress) return;
+    setBusy(true); setMessage("Checking match membership on Devnet...");
+    try {
+      const address = new PublicKey(joinAddress);
+      const state = await program.account.game.fetch(address) as any;
+      if (!publicKey.equals(state.creator) && !publicKey.equals(state.opponent)) throw new Error("NotPlayer");
+      setActiveGameAddress(address.toBase58());
+      localStorage.setItem(`dreadtide-match:${publicKey.toBase58()}`, address.toBase58());
+      await refresh(address.toBase58());
+      setMessage("Existing match restored. Import your private fleet recovery if this browser does not have it.");
+    } catch (error) { setMessage(errorMessage(error, "Could not resume that match.")); }
+    finally { setBusy(false); }
+  }
+
   async function copyMatchAddress() {
     if (!activeGameAddress) return;
     try {
@@ -433,7 +448,7 @@ export function GameConsole() {
       {!connected ? <div className="console-empty"><h3>Your fleet is waiting.</h3><p>Connect Phantom or Solflare above to create a Devnet match, join an opponent, and commit your hidden board.</p></div> : (
         <div className="console-grid">
           <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Generate a fresh game account with a 15 minute invitation window.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE FRESH MATCH"}</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
-          <div className="console-card join-card"><span className="step">02</span><h3>Join a match</h3><p>Use an address from another captain. Your own match cannot be joined by the same wallet.</p><label htmlFor="join-address">Opponent's game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button></div>
+          <div className="console-card join-card"><span className="step">02</span><h3>Join or resume</h3><p>Join a new opponent match, or restore a match already owned by this wallet.</p><label htmlFor="join-address">Game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button><button className="secondary-console-action" disabled={busy || !joinAddress} onClick={resumeGame}>RESUME MY MATCH</button></div>
           <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={phase !== "COMMIT" || myCommitted} onClick={() => document.getElementById("fleet-title")?.scrollIntoView({ behavior: "smooth", block: "start" })}>{myCommitted ? "FLEET COMMITTED" : phase === "COMMIT" ? "DEPLOY FLEET BELOW" : "AWAITING OPPONENT"}</button></div>
         </div>
       )}
