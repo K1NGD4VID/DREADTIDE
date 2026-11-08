@@ -67,6 +67,7 @@ export function GameConsole() {
   const [phase, setPhase] = useState("LOBBY");
   const [players, setPlayers] = useState("Waiting for opponent");
   const [committed, setCommitted] = useState("0 / 2");
+  const [myCommitted, setMyCommitted] = useState(false);
   const [deadline, setDeadline] = useState(0);
   const [clockNow, setClockNow] = useState(() => Math.floor(Date.now() / 1000));
   const [busy, setBusy] = useState(false);
@@ -89,19 +90,34 @@ export function GameConsole() {
       const nextPhase = phaseName(state.phase);
       setPhase(nextPhase.replace(/([A-Z])/g, " $1").toUpperCase());
       setCommitted(`${state.committed.filter(Boolean).length} / 2`);
+      setMyCommitted(publicKey?.equals(state.creator) ? state.committed[0] : publicKey?.equals(state.opponent) ? state.committed[1] : false);
       setPlayers(state.opponent?.toBase58?.() && state.opponent.toBase58() !== EMPTY_KEY.toBase58() ? "Opponent joined" : "Waiting for opponent");
       setGameId(state.gameId.toString());
       setDeadline(Number(state.deadline.toString()));
       if (publicKey?.equals(state.creator)) setRole("Creator");
       else if (publicKey?.equals(state.opponent)) setRole("Opponent");
       else setRole("Spectator");
-      setMessage("Live state synced from Devnet.");
     } catch {
       setMessage("Could not read that game account. Check the address and Devnet network.");
     }
   }, [activeGameAddress, program, publicKey]);
 
-  useEffect(() => { if (connected && activeGameAddress) void refresh(); }, [connected, activeGameAddress, refresh]);
+  const walletAddress = publicKey?.toBase58();
+  useEffect(() => {
+    const previous = walletAddress ? localStorage.getItem(`dreadtide-match:${walletAddress}`) : null;
+    setActiveGameAddress(previous ?? "");
+    setRole("Not assigned");
+    setPhase("LOBBY");
+    setDeadline(0);
+    setCommitted("0 / 2");
+    setMyCommitted(false);
+  }, [walletAddress]);
+  useEffect(() => {
+    if (!connected || !activeGameAddress) return;
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5_000);
+    return () => window.clearInterval(timer);
+  }, [connected, activeGameAddress, refresh]);
   useEffect(() => {
     const timer = window.setInterval(() => setClockNow(Math.floor(Date.now() / 1000)), 1000);
     return () => window.clearInterval(timer);
@@ -127,9 +143,12 @@ export function GameConsole() {
       setMessage("Awaiting wallet approval...");
       await program.methods.createGame(new BN(id.toString())).accountsStrict({ game: pda, creator: publicKey, systemProgram: SystemProgram.programId }).rpc();
       setActiveGameAddress(pda.toBase58());
+      localStorage.setItem(`dreadtide-match:${publicKey.toBase58()}`, pda.toBase58());
       setJoinAddress("");
       setRole("Creator");
-      setPhase("LOBBY"); setPlayers("Waiting for opponent"); setMessage("Match created. Copy the address below and send it to a different wallet.");
+      setPhase("LOBBY"); setPlayers("Waiting for opponent"); setCommitted("0 / 2"); setMyCommitted(false);
+      await refresh(pda.toBase58());
+      setMessage("Match created. Copy the address below and send it to a different wallet.");
     } catch (error) { setMessage(errorMessage(error, "Create transaction failed.")); }
     finally { setBusy(false); }
   }
@@ -161,6 +180,7 @@ export function GameConsole() {
       setMessage("Awaiting wallet approval...");
       await program.methods.joinGame().accountsStrict({ game: address, opponent: publicKey }).rpc();
       setActiveGameAddress(address.toBase58());
+      localStorage.setItem(`dreadtide-match:${publicKey.toBase58()}`, address.toBase58());
       setRole("Opponent");
       await refresh(address.toBase58());
       setMessage("Joined. Both captains can now commit their fleet.");
@@ -170,8 +190,12 @@ export function GameConsole() {
 
   async function copyMatchAddress() {
     if (!activeGameAddress) return;
-    await navigator.clipboard.writeText(activeGameAddress);
-    setMessage("Match address copied. Send it to your opponent.");
+    try {
+      await navigator.clipboard.writeText(activeGameAddress);
+      setMessage("Match address copied. Send it to your opponent.");
+    } catch {
+      setMessage("Clipboard access was blocked. Select and copy the address above.");
+    }
   }
 
   async function commitFleet() {
@@ -179,6 +203,11 @@ export function GameConsole() {
     setBusy(true); setMessage("Building your private Merkle commitment...");
     try {
       const state = await program.account.game.fetch(new PublicKey(activeGameAddress)) as any;
+      const playerIndex = publicKey.equals(state.creator) ? 0 : publicKey.equals(state.opponent) ? 1 : -1;
+      if (playerIndex < 0) throw new Error("NotPlayer");
+      if (phaseName(state.phase) !== "commit") throw new Error("WrongPhase");
+      if (state.committed[playerIndex]) throw new Error("AlreadyCommitted");
+      if (Math.floor(Date.now() / 1000) > Number(state.deadline.toString())) throw new Error("DeadlinePassed");
       const stored = localStorage.getItem(`dreadtide-seed:${activeGameAddress}:${publicKey.toBase58()}`);
       const seed = stored ? Uint8Array.from(JSON.parse(stored) as number[]) : bytesFromSeed();
       localStorage.setItem(`dreadtide-seed:${activeGameAddress}:${publicKey.toBase58()}`, JSON.stringify(Array.from(seed)));
@@ -200,7 +229,7 @@ export function GameConsole() {
         <div className="console-grid">
           <div className="console-card create-card"><span className="step">01</span><h3>Create a match</h3><p>Generate a fresh game account with a 15 minute invitation window.</p><label htmlFor="game-id">Game ID</label><input id="game-id" value={gameId} readOnly /><button disabled={busy} onClick={createGame}>{busy ? "PREPARING..." : "CREATE FRESH MATCH"}</button>{role === "Creator" && activeGameAddress ? <div className="share-match"><span>YOUR MATCH ADDRESS</span><code>{activeGameAddress}</code><button className="secondary-console-action" onClick={copyMatchAddress}>COPY FOR OPPONENT</button></div> : null}</div>
           <div className="console-card join-card"><span className="step">02</span><h3>Join a match</h3><p>Use an address from another captain. Your own match cannot be joined by the same wallet.</p><label htmlFor="join-address">Opponent's game account</label><input id="join-address" value={joinAddress} onChange={(event) => setJoinAddress(event.target.value.trim())} placeholder="Paste a match address" /><button disabled={busy || !joinAddress} onClick={joinGame}>JOIN OPPONENT MATCH</button></div>
-          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={busy || !activeGameAddress || phase !== "COMMIT" || deadline <= clockNow} onClick={commitFleet}>COMMIT HIDDEN FLEET</button></div>
+          <div className="console-card status-card"><span className="step">03</span><h3>Fleet status</h3><div className="status-lines"><span>GAME <b>{activeGameAddress ? short(activeGameAddress) : "NOT SET"}</b></span><span>ROLE <b>{role.toUpperCase()}</b></span><span>PHASE <b>{phase}</b></span><span>ACTION WINDOW <b className={deadline > 0 && deadline <= clockNow ? "expired" : ""}>{deadline ? formatRemaining(deadline - clockNow) : "NOT STARTED"}</b></span><span>PLAYERS <b>{players}</b></span><span>COMMITMENTS <b>{committed}</b></span></div><button className="commit-button" disabled={busy || !activeGameAddress || phase !== "COMMIT" || deadline <= clockNow || myCommitted} onClick={commitFleet}>{myCommitted ? "FLEET COMMITTED" : "COMMIT HIDDEN FLEET"}</button></div>
         </div>
       )}
       <p className="console-message" role="status">{message}</p>

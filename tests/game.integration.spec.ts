@@ -46,6 +46,10 @@ describe("local validator match", () => {
     const opponentRoot = Array.from(opponentTree[6][0]);
 
     await program.methods.createGame(new BN(gameId.toString())).accountsStrict({ game: gamePda, creator: creator.publicKey, systemProgram: SystemProgram.programId }).rpc();
+    const created = await program.account.game.fetch(gamePda);
+    const chainTime = await connection.getBlockTime(await connection.getSlot("confirmed"));
+    expect(Number(created.deadline.toString()) - (chainTime ?? Math.floor(Date.now() / 1000))).toBeGreaterThanOrEqual(880);
+    expect(Number(created.deadline.toString()) - (chainTime ?? Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(920);
     await program.methods.joinGame().accountsStrict({ game: gamePda, opponent: opponent.publicKey }).signers([opponent]).rpc();
     await program.methods.commitBoard(creatorRoot).accountsStrict({ game: gamePda, player: creator.publicKey }).rpc();
     await program.methods.commitBoard(opponentRoot).accountsStrict({ game: gamePda, player: opponent.publicKey }).signers([opponent]).rpc();
